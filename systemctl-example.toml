@@ -1,0 +1,17 @@
+[Unit]
+Description=Telegram bot @cdda_bot
+
+[Service]
+User=catabot
+Group=catabot
+WorkingDirectory=/home/catabot/catabot
+ExecStart=/home/catabot/catabot/venv/bin/python -m catabot
+Restart=always
+KillMode=process
+TimeoutSec=300
+RestartSec=30
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target
