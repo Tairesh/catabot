@@ -18,7 +18,7 @@ test:
     script:
         - python -m pip install --upgrade pip
         - pip install flake8
-        - flake8 ashlee --count --max-line-length=127 --show-source --statistics --exclude .git,__pycache__,venv
+        - flake8 catabot --count --max-line-length=127 --show-source --statistics --exclude .git,__pycache__,venv
 
 deploy:
     stage: deploy

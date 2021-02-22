@@ -97,6 +97,82 @@ def _get_page_view(results, keyword, action, maxpage, page=1):
     return desc, markup
 
 
+def _get_quality_results(key):
+    page = urllib.request.urlopen("https://cdda-trunk.chezzo.com/qualities/{}".format(quote(key))).read()
+    soup = BeautifulSoup(page, features="html.parser")
+    table = soup.find('table', {'class': 'table table-bordered table-hover tablesorter'})
+
+    results = []
+    trs = table.findAll('tr')
+    for tr in trs:
+        tds = tr.findAll('td')
+        if len(tds) == 0:
+            continue
+
+        link = tds[1].find('a')
+        level = int(tds[2].text)
+        results.append((link.text, link['href'], level))
+    return results, soup
+
+
+def _send_quality_results(bot, message, results, soup):
+    if len(results) > 0:
+        chunks = []
+        title = soup.find('ul', {'class': 'nav nav-pills nav-stacked'}).find('li', {'class': 'active'}).text
+        result = f"<b>Items with quality {title}:</b>\n"
+        for item, href, level in results:
+            row = f"<a href='{href}'>{item}</a>\n"
+            if len(result) + len(row) > 3000:
+                chunks.append(result)
+                result = row
+            else:
+                result += row
+        chunks.append(result)
+        for chunk in chunks:
+            bot.reply_to(message, chunk, parse_mode='HTML')
+    else:
+        bot.send_sticker(message.chat.id, 'CAADAgADxgADOtDfAeLvpRcG6I1bFgQ', message.message_id)
+
+
+def quality(bot: TeleBot, message: Message):
+    bot.send_chat_action(message.chat.id, 'typing')
+    keyword = utils.get_keyword(message).upper()
+    if not keyword:
+        cmd = utils.get_command(message)
+        bot.reply_to(message, f"Usage example: `/{cmd} fine metal sawing`", parse_mode='Markdown')
+        return
+
+    tmp_message = bot.reply_to(message, "Loading search results...")
+
+    try:
+        results, soup = _get_quality_results(keyword)
+        if len(results) == 0:
+            ul = soup.find('ul', {'class': 'nav nav-pills nav-stacked'})
+            qualities = list(filter(lambda kn: keyword.lower() == kn[0].lower() or keyword.lower() in kn[1].lower(),
+                                    [(li.find('a')['href'].split('/').pop(), li.text) for li in ul.findAll('li')]))
+            if len(qualities) == 1:
+                results, soup = _get_quality_results(qualities[0][0].upper())
+            elif len(qualities) > 1:
+                bot.reply_to(message, "Choose quality:", reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(name, callback_data='cdda_quality:'+key)] for key, name in qualities
+                ]))
+                try:
+                    bot.delete_message(message.chat.id, tmp_message.message_id)
+                except ApiException:
+                    pass
+                return
+
+        _send_quality_results(bot, message, results, soup)
+
+    except urllib.error.HTTPError as e:
+        bot.reply_to(message, "I can't load search page: {}".format(e))
+
+    try:
+        bot.delete_message(message.chat.id, tmp_message.message_id)
+    except ApiException:
+        pass
+
+
 def search(bot: TeleBot, message: Message):
     bot.send_chat_action(message.chat.id, 'typing')
     keyword = utils.get_keyword(message)
@@ -143,13 +219,21 @@ def search(bot: TeleBot, message: Message):
 def btn_pressed(bot: TeleBot, message: Message, data: str):
     bot.send_chat_action(message.chat.id, 'typing')
     if data.startswith('cdda:'):
-        data = data[5::]
-        url = CATADDA_LINK_START + data
-        _parse_link(bot, message.reply_to_message, url)
         try:
             bot.delete_message(message.chat.id, message.message_id)
         except ApiException:
             pass
+        data = data[5::]
+        url = CATADDA_LINK_START + data
+        _parse_link(bot, message.reply_to_message, url)
+    elif data.startswith('cdda_quality:'):
+        try:
+            bot.delete_message(message.chat.id, message.message_id)
+        except ApiException:
+            pass
+        key = data.split(':').pop().upper()
+        results, soup = _get_quality_results(key)
+        _send_quality_results(bot, message.reply_to_message, results, soup)
     elif data == 'cdda_cancel':
         bot.edit_message_text(message.text.split('\n')[0] + '\n(canceled)', message.chat.id, message.message_id)
     elif data.startswith('cdda_page'):

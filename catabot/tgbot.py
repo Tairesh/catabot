@@ -4,7 +4,7 @@ from telebot import TeleBot
 from telebot.types import User
 
 from catabot import constants
-from catabot.commands.search import search, btn_pressed
+from catabot.commands.search import search, btn_pressed, quality
 from catabot.commands.release import get_release
 
 
@@ -30,6 +30,10 @@ class TelegramBot:
         @self.bot.message_handler(['craft', 'c', 'item', 'i', 'disassemble', 'disasm', 'd', 'monster', 'mob', 'm'])
         def _search(message):
             search(self.bot, message)
+
+        @self.bot.message_handler(['quality', 'q'])
+        def _quality(message):
+            quality(self.bot, message)
 
         @self.bot.callback_query_handler(func=lambda call: call.data)
         def _btn_pressed(call):
