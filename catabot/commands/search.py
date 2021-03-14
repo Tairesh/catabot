@@ -1,3 +1,4 @@
+import traceback
 import urllib.request
 import urllib.error
 from urllib.parse import quote
@@ -8,6 +9,7 @@ from telebot.apihelper import ApiException
 from telebot.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from catabot import utils
+from catabot.utils import escape
 
 CATADDA_SEARCH = "https://cdda-trunk.chezzo.com/search?q={}"
 CATADDA_LINK_START = "https://cdda-trunk.chezzo.com/"
@@ -71,10 +73,11 @@ def _parse_link(bot: TeleBot, message: Message, url: str):
 
         name = title.text
         desc = div.text.replace('\n\n\n', '\n\n').replace('\n\n\n', '\n\n').replace('>', '\n  >')
-        text = f"<b>{name}</b><code>{desc}</code>"
+        text = f"<b>{escape(name)}</b><code>{escape(desc)}</code>"
         bot.reply_to(message, text, parse_mode='html')
     except Exception:
         bot.send_sticker(message.chat.id, 'CAADAgADyAADOtDfARL0PAOfBWJWFgQ', message.message_id)
+        traceback.print_exc()
 
 
 def _get_page_view(results, keyword, action, maxpage, page=1):

@@ -24,3 +24,9 @@ def chunks(s, n):
     """Produce `n`-character chunks from `s`."""
     for start in range(0, len(s), n):
         yield s[start:start + n]
+
+
+def escape(html):
+    """Returns the given HTML with ampersands, quotes and carets encoded."""
+    return html\
+        .replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#39;')
