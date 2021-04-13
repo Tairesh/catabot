@@ -1,5 +1,6 @@
 import json
 import urllib.request
+from enum import Enum, auto
 
 from telebot import TeleBot
 from telebot.apihelper import ApiException
@@ -8,6 +9,7 @@ from telebot.types import Message
 from catabot import utils
 
 CATADDA_GIT_API = "https://api.github.com/repos/CleverRaven/Cataclysm-DDA/releases"
+CATABN_GIT_API = "https://api.github.com/repos/cataclysmbnteam/Cataclysm-BN/releases"
 
 LINUX = 'linux'
 LINUX_NAMES = {'lin', 'linux'}
@@ -21,23 +23,26 @@ ANDROID32 = 'android32'
 ANDROID32_NAMES = {'android32', 'android 32', 'android 32bit', 'android 32 bit'}
 ALL_PLATFORM_NAMES = LINUX_NAMES | WINDOWS_NAMES | OSX_NAMES | ANDROID_NAMES | ANDROID32_NAMES
 
-MODE_ALL = 'all'
-MODE_VERSION = 'version'
-MODE_PLATFORM = 'platform'
-MODE_STABLE = 'stable'
-MODE_LAST = 'last'
-MODE_INVALID = 'invalid'
+
+class Mode(Enum):
+    ALL = auto()
+    VERSION = auto()
+    PLATFORM = auto()
+    STABLE = auto()
+    LAST = auto()
+    INVALID = auto()
 
 
 def get_release(bot: TeleBot, message: Message):
     bot.send_chat_action(message.chat.id, 'typing')
     keyword = utils.get_keyword(message).lower().strip()
 
-    mode = MODE_ALL
+    mode = Mode.ALL
+    fork = False
     version = None
     if keyword:
         if keyword in ALL_PLATFORM_NAMES:
-            mode = MODE_PLATFORM
+            mode = Mode.PLATFORM
             if keyword in LINUX_NAMES:
                 version = LINUX
             elif keyword in WINDOWS_NAMES:
@@ -49,19 +54,24 @@ def get_release(bot: TeleBot, message: Message):
             elif keyword in ANDROID32_NAMES:
                 version = ANDROID32
         elif keyword.isnumeric():
-            mode = MODE_VERSION
+            mode = Mode.VERSION
             version = int(keyword)
             if version < 10000:
-                mode = MODE_INVALID
+                mode = Mode.INVALID
         elif keyword == 'stable':
-            mode = MODE_STABLE
+            mode = Mode.STABLE
         elif keyword in {'last', 'latest'}:
-            mode = MODE_LAST
+            mode = Mode.LAST
+        elif keyword in {'bn', 'bright nights'}:
+            fork = True
+            mode = Mode.LAST
         elif keyword:
-            mode = MODE_INVALID
+            mode = Mode.INVALID
+
+    api = CATABN_GIT_API if fork else CATADDA_GIT_API
 
     def _last_release() -> int:
-        return int(json.loads(urllib.request.urlopen(CATADDA_GIT_API).read())[0]['name'].split('#').pop())
+        return int(json.loads(urllib.request.urlopen(api).read())[0]['name'].split('#').pop())
 
     def _links_from_assets(assets) -> dict:
         links = {
@@ -72,20 +82,20 @@ def get_release(bot: TeleBot, message: Message):
         }
 
         for asset in assets:
-            if asset['label'] == 'Linux_x64 Tiles':
+            if asset['label'] == 'Linux_x64 Tiles' or 'lin64-tiles' in asset['name']:
                 links[LINUX] = asset['browser_download_url']
-            elif asset['label'] == 'OSX Tiles':
+            elif asset['label'] == 'OSX Tiles' or 'osx32-tiles' in asset['name']:
                 links[OSX] = asset['browser_download_url']
-            elif asset['label'] == 'Windows_x64 Tiles':
+            elif asset['label'] == 'Windows_x64 Tiles' or 'win64-tiles' in asset['name']:
                 links[WINDOWS] = asset['browser_download_url']
-            elif asset['label'].startswith('Android') and '64' in asset['label']:
+            elif (asset['label'].startswith('Android') and '64' in asset['label']) or ('arm64-v8a' in asset['name']):
                 links[ANDROID] = asset['browser_download_url']
-            elif asset['label'].startswith('Android') and '32' in asset['label']:
+            elif (asset['label'].startswith('Android') and '32' in asset['label']) or ('armeabi-v7a' in asset['name']):
                 links[ANDROID32] = asset['browser_download_url']
         return links
 
     def _send_links(name, links):
-        text = "<b>Release " + name + ':</b>\n'
+        text = name + ':\n\n'
         for platform, link in links.items():
             text += platform + ': '
             if link:
@@ -95,39 +105,45 @@ def get_release(bot: TeleBot, message: Message):
                 text += 'not compiled\n'
         bot.reply_to(message, text, parse_mode='html')
 
-    if mode == MODE_INVALID:
+    def _release_name(release):
+        name = release['name'] if release['name'] else release['tag_name']
+        date = release['published_at'].replace('T', ' ').replace('Z', '')
+        return f"Release <b>{name}</b> <i>{date}</i>"
+
+    if mode == Mode.INVALID:
         cmd = utils.get_command(message)
         bot.reply_to(message, "Usage example:\n"
                               f"`{cmd}` — last experimental build for all platforms\n"
                               f"`{cmd} latest` — latest experimental build (probably not succeeded)\n"
                               f"`{cmd} windows|linux|osx|android` — last (successful) build for selected platform\n"
                               f"`{cmd} stable` — last stable build\n"
-                              f"`{cmd} 11483` — get build by number", parse_mode='Markdown')
+                              f"`{cmd} 11483` — get build by number\n"
+                              f"`{cmd} bn` — get Cataclysm: Bright Nights release", parse_mode='Markdown')
         return
-    elif mode == MODE_VERSION:
+    elif mode == Mode.VERSION:
         delta = _last_release() - version
         page = int(delta / 100) + 1
-        data = json.loads(urllib.request.urlopen(CATADDA_GIT_API + f'?page={page}&per_page=100').read())
+        data = json.loads(urllib.request.urlopen(api + f'?page={page}&per_page=100').read())
 
         for release in data:
             if release['name'].endswith(keyword):
-                _send_links(release['name'], _links_from_assets(release['assets']))
+                _send_links(_release_name(release), _links_from_assets(release['assets']))
                 return
-    elif mode == MODE_STABLE:
-        release = json.loads(urllib.request.urlopen(CATADDA_GIT_API + '/latest').read())
-        _send_links(release['name'], _links_from_assets(release['assets']))
+    elif mode == Mode.STABLE:
+        release = json.loads(urllib.request.urlopen(api + '/latest').read())
+        _send_links(_release_name(release), _links_from_assets(release['assets']))
         return
     else:
         page = 1
         tmp_message = None
         while page < 100:
-            data = json.loads(urllib.request.urlopen(CATADDA_GIT_API + f'?page={page}&per_page=100').read())
+            data = json.loads(urllib.request.urlopen(api + f'?page={page}&per_page=100').read())
             for release in data:
                 links = _links_from_assets(release['assets'])
-                if (mode == MODE_PLATFORM and version in links and links[version]) \
-                        or (mode == MODE_ALL and all(links.values())) \
-                        or mode == MODE_LAST:
-                    _send_links(release['name'], {version: links[version]} if mode == MODE_PLATFORM else links)
+                if (mode == Mode.PLATFORM and version in links and links[version]) \
+                        or (mode == Mode.ALL and all(links.values())) \
+                        or mode == Mode.LAST:
+                    _send_links(_release_name(release), {version: links[version]} if mode == Mode.PLATFORM else links)
                     if tmp_message:
                         try:
                             bot.delete_message(tmp_message.chat.id, tmp_message.message_id)
