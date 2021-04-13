@@ -74,7 +74,10 @@ def _parse_link(bot: TeleBot, message: Message, url: str):
         name = title.text
         desc = div.text.replace('\n\n\n', '\n\n').replace('\n\n\n', '\n\n').replace('>', '\n  >')
         text = f"<b>{escape(name)}</b><code>{escape(desc)}</code>"
-        bot.reply_to(message, text, parse_mode='html')
+        if len(text) > 4096:
+            bot.reply_to(message, url)
+        else:
+            bot.reply_to(message, text, parse_mode='html')
     except Exception:
         bot.send_sticker(message.chat.id, 'CAADAgADyAADOtDfARL0PAOfBWJWFgQ', message.message_id)
         traceback.print_exc()
