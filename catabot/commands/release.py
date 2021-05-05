@@ -86,11 +86,14 @@ def get_release(bot: TeleBot, message: Message):
                 links[LINUX] = asset['browser_download_url']
             elif asset['label'] == 'OSX Tiles' or 'osx32-tiles' in asset['name']:
                 links[OSX] = asset['browser_download_url']
-            elif asset['label'] == 'Windows_x64 Tiles' or 'win64-tiles' in asset['name']:
+            elif asset['label'] == 'Windows_x64 Tiles' \
+                    or 'win64-tiles' in asset['name'] or 'Windows-Tiles' in asset['name']:
                 links[WINDOWS] = asset['browser_download_url']
-            elif (asset['label'].startswith('Android') and '64' in asset['label']) or ('arm64-v8a' in asset['name']):
+            elif (asset['label'] and asset['label'].startswith('Android') and '64' in asset['label'])\
+                    or ('arm64-v8a' in asset['name']):
                 links[ANDROID] = asset['browser_download_url']
-            elif (asset['label'].startswith('Android') and '32' in asset['label']) or ('armeabi-v7a' in asset['name']):
+            elif (asset['label'] and asset['label'].startswith('Android') and '32' in asset['label'])\
+                    or ('armeabi-v7a' in asset['name']):
                 links[ANDROID32] = asset['browser_download_url']
         return links
 
