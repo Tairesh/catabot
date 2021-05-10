@@ -15,13 +15,15 @@ LINUX = 'linux'
 LINUX_NAMES = {'lin', 'linux'}
 WINDOWS = 'windows'
 WINDOWS_NAMES = {'win', 'window', 'windows'}
+WINDOWS32 = 'windows x32'
+WINDOWS32_NAMES = {'windows32', 'win32', 'windows 32', 'win 32'}
 OSX = 'osx'
 OSX_NAMES = {'osx', 'os x', 'apple', 'macos'}
 ANDROID = 'android'
 ANDROID_NAMES = {'android', 'phone', 'android64', 'android 64', 'android 64bit', 'android 64 bit'}
-ANDROID32 = 'android32'
+ANDROID32 = 'android x32'
 ANDROID32_NAMES = {'android32', 'android 32', 'android 32bit', 'android 32 bit'}
-ALL_PLATFORM_NAMES = LINUX_NAMES | WINDOWS_NAMES | OSX_NAMES | ANDROID_NAMES | ANDROID32_NAMES
+ALL_PLATFORM_NAMES = LINUX_NAMES | WINDOWS_NAMES | WINDOWS32_NAMES | OSX_NAMES | ANDROID_NAMES | ANDROID32_NAMES
 
 
 class Mode(Enum):
@@ -47,6 +49,8 @@ def get_release(bot: TeleBot, message: Message):
                 version = LINUX
             elif keyword in WINDOWS_NAMES:
                 version = WINDOWS
+            elif keyword in WINDOWS32_NAMES:
+                version = WINDOWS32
             elif keyword in OSX_NAMES:
                 version = OSX
             elif keyword in ANDROID_NAMES:
@@ -82,13 +86,14 @@ def get_release(bot: TeleBot, message: Message):
         }
 
         for asset in assets:
-            if asset['label'] == 'Linux_x64 Tiles' or 'lin64-tiles' in asset['name']:
+            if asset['label'] == 'Linux_x64 Tiles' or 'linux-tiles-x64' in asset['name']:
                 links[LINUX] = asset['browser_download_url']
-            elif asset['label'] == 'OSX Tiles' or 'osx32-tiles' in asset['name']:
+            elif asset['label'] == 'OSX Tiles' or 'osx-tiles-x64' in asset['name']:
                 links[OSX] = asset['browser_download_url']
-            elif asset['label'] == 'Windows_x64 Tiles' \
-                    or 'win64-tiles' in asset['name'] or 'windows-tiles-x64' in asset['name']:
+            elif asset['label'] == 'Windows_x64 Tiles' or 'windows-tiles-x64' in asset['name']:
                 links[WINDOWS] = asset['browser_download_url']
+            elif 'windows-tiles-x32' in asset['name']:
+                links[WINDOWS32] = asset['browser_download_url']
             elif (asset['label'] and asset['label'].startswith('Android') and '64' in asset['label'])\
                     or ('arm64-v8a' in asset['name']):
                 links[ANDROID] = asset['browser_download_url']
