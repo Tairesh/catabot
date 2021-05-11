@@ -1,6 +1,7 @@
 import threading
 
 from telebot import TeleBot
+from telebot.apihelper import ApiException
 from telebot.types import User
 
 from catabot import constants
@@ -45,6 +46,15 @@ class TelegramBot:
         @self.bot.message_handler(['release', 'get_release'])
         def _get_release(message):
             get_release(self.bot, message)
+
+        @self.bot.message_handler(func=lambda m: m.from_user and m.from_user.id == 777000
+                                  and m.forward_from_chat and m.forward_from_chat.id == -1001332994456)
+        def _unpin(message):
+            print(message)
+            try:
+                self.bot.unpin_chat_message(message.chat.id, message.message_id)
+            except ApiException:
+                pass
 
     # Start the bot
     def bot_start_polling(self):
