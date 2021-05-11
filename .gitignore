@@ -4,3 +4,5 @@ __pycache__/
 
 /venv/
 /.idea/
+
+/changelog_posted.txt
