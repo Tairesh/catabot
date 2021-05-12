@@ -47,8 +47,7 @@ class TelegramBot:
         def _get_release(message):
             get_release(self.bot, message)
 
-        @self.bot.message_handler(func=lambda m: m.from_user and m.from_user.id == 777000
-                                  and m.forward_from_chat and m.forward_from_chat.id == -1001332994456)
+        @self.bot.message_handler(func=lambda m: m.from_user and m.from_user.id == 777000)
         def _unpin(message):
             print(message)
             try:
