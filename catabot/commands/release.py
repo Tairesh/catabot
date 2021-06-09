@@ -9,6 +9,7 @@ from telebot.types import Message
 from catabot import utils
 
 CATADDA_GIT_API = "https://api.github.com/repos/CleverRaven/Cataclysm-DDA/releases"
+CATATAIRESH_GIT_API = "https://api.github.com/repos/Tairesh/Cataclysm-DDA/releases"
 CATABN_GIT_API = "https://api.github.com/repos/cataclysmbnteam/Cataclysm-BN/releases"
 
 LINUX = 'linux'
@@ -40,7 +41,7 @@ def get_release(bot: TeleBot, message: Message):
     keyword = utils.get_keyword(message).lower().strip()
 
     mode = Mode.ALL
-    fork = False
+    fork = None
     version = None
     if keyword:
         if keyword in ALL_PLATFORM_NAMES:
@@ -67,12 +68,20 @@ def get_release(bot: TeleBot, message: Message):
         elif keyword in {'last', 'latest'}:
             mode = Mode.LAST
         elif keyword in {'bn', 'bright nights'}:
-            fork = True
+            fork = 'bn'
+            mode = Mode.LAST
+        elif keyword == 'tairesh':
+            fork = 'tairesh'
             mode = Mode.LAST
         elif keyword:
             mode = Mode.INVALID
 
-    api = CATABN_GIT_API if fork else CATADDA_GIT_API
+    if fork == 'bn':
+        api = CATABN_GIT_API
+    elif fork == 'tairesh':
+        api = CATATAIRESH_GIT_API
+    else:
+        api = CATADDA_GIT_API
 
     def _last_release() -> int:
         return int(json.loads(urllib.request.urlopen(api).read())[0]['name'].split('#').pop())
