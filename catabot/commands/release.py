@@ -40,7 +40,7 @@ def get_release(bot: TeleBot, message: Message):
     bot.send_chat_action(message.chat.id, 'typing')
     keyword = utils.get_keyword(message).lower().strip()
 
-    mode = Mode.ALL
+    mode = Mode.LAST
     fork = None
     version = None
     if keyword:
@@ -63,6 +63,8 @@ def get_release(bot: TeleBot, message: Message):
             version = int(keyword)
             if version < 10000:
                 mode = Mode.INVALID
+        elif keyword == 'all':
+            mode = Mode.ALL
         elif keyword == 'stable':
             mode = Mode.STABLE
         elif keyword in {'last', 'latest'}:
@@ -103,9 +105,9 @@ def get_release(bot: TeleBot, message: Message):
                 links[WINDOWS] = asset['browser_download_url']
             elif 'windows-tiles-x32' in asset['name'] or 'win32-tiles' in asset['name']:
                 links[WINDOWS32] = asset['browser_download_url']
-            elif 'arm64-v8a' in asset['name']:
+            elif 'android-x64' in asset['name'] or 'arm64-v8a' in asset['name']:
                 links[ANDROID] = asset['browser_download_url']
-            elif 'armeabi-v7a' in asset['name']:
+            elif 'android-x32' in asset['name'] or 'armeabi-v7a' in asset['name']:
                 links[ANDROID32] = asset['browser_download_url']
         return links
 
@@ -128,12 +130,11 @@ def get_release(bot: TeleBot, message: Message):
     if mode == Mode.INVALID:
         cmd = utils.get_command(message)
         bot.reply_to(message, "Usage example:\n"
-                              f"`{cmd}` — last experimental build for all platforms\n"
-                              f"`{cmd} latest` — latest experimental build (probably not succeeded)\n"
-                              f"`{cmd} windows|linux|osx|android` — last (successful) build for selected platform\n"
-                              f"`{cmd} stable` — last stable build\n"
-                              f"`{cmd} 11483` — get build by number\n"
-                              f"`{cmd} bn` — get Cataclysm: Bright Nights release", parse_mode='Markdown')
+                              f"`{cmd}` — latest experimental release\n"
+                              f"`{cmd} all` — last experimental release, builded for all platforms\n"
+                              f"`{cmd} windows|linux|osx|android` — last (successful) release, builded for selected platform\n"
+                              f"`{cmd} stable` — last stable release\n"
+                              f"`{cmd} bn` — Cataclysm: Bright Nights last release", parse_mode='Markdown')
         return
     elif mode == Mode.VERSION:
         delta = _last_release() - version
@@ -151,7 +152,7 @@ def get_release(bot: TeleBot, message: Message):
     else:
         page = 1
         tmp_message = None
-        while page < 100:
+        while page < 10:
             data = json.loads(urllib.request.urlopen(api + f'?page={page}&per_page=100').read())
             for release in data:
                 links = _links_from_assets(release['assets'])
@@ -170,4 +171,9 @@ def get_release(bot: TeleBot, message: Message):
                                                     " please wait a little.")
             page += 1
 
+    if tmp_message:
+        try:
+            bot.delete_message(tmp_message.chat.id, tmp_message.message_id)
+        except ApiException:
+            pass
     bot.send_sticker(message.chat.id, 'CAADAgADxgADOtDfAeLvpRcG6I1bFgQ', message.message_id)
