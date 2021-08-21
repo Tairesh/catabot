@@ -96,19 +96,21 @@ def get_release(bot: TeleBot, message: Message):
             ANDROID: None,
         }
 
-        for asset in assets:
-            if 'linux-tiles-x64' in asset['name'] or 'lin64-tiles' in asset['name']:
-                links[LINUX] = asset['browser_download_url']
-            elif 'osx-tiles-x64' in asset['name'] or 'osx64-tiles' in asset['name']:
-                links[OSX] = asset['browser_download_url']
-            elif 'windows-tiles-x64' in asset['name'] or 'win64-tiles' in asset['name']:
-                links[WINDOWS] = asset['browser_download_url']
-            elif 'windows-tiles-x32' in asset['name'] or 'win32-tiles' in asset['name']:
-                links[WINDOWS32] = asset['browser_download_url']
-            elif 'android-x64' in asset['name'] or 'arm64-v8a' in asset['name']:
-                links[ANDROID] = asset['browser_download_url']
-            elif 'android-x32' in asset['name'] or 'armeabi-v7a' in asset['name']:
-                links[ANDROID32] = asset['browser_download_url']
+        asset_names_by_platform = {
+            LINUX: {'linux-tiles-x64', 'lin64-tiles', 'Linux_x64-Tiles'},
+            OSX: {'osx-tiles-x64', 'osx64-tiles', 'OSX-Tiles'},
+            WINDOWS: {'windows-tiles-x64', 'win64-tiles', 'Windows_x64-Tiles'},
+            WINDOWS32: {'windows-tiles-x32', 'win32-tiles', 'Windows-Tiles'},
+            ANDROID: {'android-x64', 'arm64-v8a', 'Android_arm64'},
+            ANDROID32: {'android-x32', 'armeabi-v7a', 'Android_arm32'},
+        }
+
+        for platform in asset_names_by_platform:
+            for asset in assets:
+                for s in asset_names_by_platform[platform]:
+                    if s in asset['name']:
+                        links[platform] = asset['browser_download_url']
+                        break
         return links
 
     def _send_links(name, links):
