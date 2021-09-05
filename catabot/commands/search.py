@@ -30,7 +30,9 @@ NUMBERS_EMOJI = {
 
 def _get_search_results(keyword, action):
     results = []
-    page = urllib.request.urlopen(CATADDA_SEARCH.format(quote(keyword))).read()
+    req = urllib.request.Request(CATADDA_SEARCH.format(quote(keyword)), None,
+                                 {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64)'})
+    page = urllib.request.urlopen(req).read()
     soup = BeautifulSoup(page, features="html.parser")
     if action == 'monster':
         ul = soup.find('ul', {"class": "list-unstyled"})
@@ -60,7 +62,8 @@ def _get_search_results(keyword, action):
 
 def _parse_link(bot: TeleBot, message: Message, url: str):
     try:
-        page = urllib.request.urlopen(url).read()
+        req = urllib.request.Request(url, None, {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64)'})
+        page = urllib.request.urlopen(req).read()
     except urllib.error.HTTPError as e:
         text = "I can't load item page: {}".format(e)
         bot.reply_to(message, text)
@@ -104,7 +107,9 @@ def _get_page_view(results, keyword, action, maxpage, page=1):
 
 
 def _get_quality_results(key):
-    page = urllib.request.urlopen("https://cdda-trunk.chezzo.com/qualities/{}".format(quote(key))).read()
+    req = urllib.request.Request("https://cdda-trunk.chezzo.com/qualities/{}".format(quote(key)), None,
+                                 {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64)'})
+    page = urllib.request.urlopen(req).read()
     soup = BeautifulSoup(page, features="html.parser")
     table = soup.find('table', {'class': 'table table-bordered table-hover tablesorter'})
 
@@ -135,7 +140,7 @@ def _send_quality_results(bot, message, results, soup):
                 result += row
         chunks.append(result)
         for chunk in chunks:
-            bot.reply_to(message, chunk, parse_mode='HTML')
+            bot.reply_to(message, chunk, parse_mode='HTML', disable_web_page_preview=True)
     else:
         bot.send_sticker(message.chat.id, 'CAADAgADxgADOtDfAeLvpRcG6I1bFgQ', message.message_id)
 
@@ -211,9 +216,10 @@ def search(bot: TeleBot, message: Message):
             _parse_link(bot, message, results[0][1])
         else:
             desc, markup = _get_page_view(results[0:10:], keyword, action, maxpage=int(count/10))
-            bot.reply_to(message, desc, reply_markup=markup, parse_mode='HTML')
+            bot.reply_to(message, desc, reply_markup=markup, parse_mode='HTML', disable_web_page_preview=True)
 
     except urllib.error.HTTPError as e:
+        print(e)
         bot.reply_to(message, "I can't load search page: {}".format(e))
 
     try:
