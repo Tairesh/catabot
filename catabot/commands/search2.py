@@ -1,6 +1,6 @@
 import json
 from collections import defaultdict
-from typing import Optional
+from typing import Optional, List
 
 from telebot import TeleBot
 from telebot.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
@@ -23,8 +23,22 @@ def _name(row: dict) -> str:
     return ''
 
 
+def _names(row: dict) -> List[str]:
+    names = []
+    if 'name' in row:
+        if isinstance(row['name'], str):
+            names.append(row['name'])
+        elif 'str' in row['name']:
+            names.append(row['name']['str'])
+        elif 'str_sp' in row['name']:
+            names.append(row['name']['str_sp'])
+    if 'id' in row:
+        names.append(row['id'])
+    return names
+
+
 def _match_row(row: dict, keyword: str) -> bool:
-    return keyword in _name(row)
+    return any(keyword in n for n in _names(row))
 
 
 def _mapped_type(typ: str) -> str:
@@ -120,7 +134,7 @@ def search2(bot: TeleBot, message: Message):
     if len(results[typ]) == 0:
         bot.send_sticker(message.chat.id, 'CAADAgADxgADOtDfAeLvpRcG6I1bFgQ', message.message_id)
     elif len(results[typ]) == 1:
-        text, markup = _action_view(action, next(results[typ])['id'])
+        text, markup = _action_view(action, results[typ][0]['id'])
         bot.reply_to(message, text, reply_markup=markup, parse_mode='HTML')
     else:
         text, markup = _page_view(results[typ], keyword, action)
