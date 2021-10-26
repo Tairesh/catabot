@@ -1,3 +1,5 @@
+from telebot import TeleBot
+from telebot.apihelper import ApiException
 from telebot.types import Message
 
 
@@ -30,3 +32,10 @@ def escape(html):
     """Returns the given HTML with ampersands, quotes and carets encoded."""
     return html\
         .replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#39;')
+
+
+def delete_message(bot: TeleBot, message: Message):
+    try:
+        bot.delete_message(message.chat.id, message.message_id)
+    except ApiException:
+        pass

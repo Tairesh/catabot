@@ -5,8 +5,9 @@ from telebot.apihelper import ApiException
 from telebot.types import User
 
 from catabot import constants
-from catabot.commands.search import search, btn_pressed, quality
+from catabot.commands.search import search, quality  # , btn_pressed
 from catabot.commands.release import get_release
+from catabot.commands.search2 import search2, btn_pressed
 
 
 def threaded(fn):
@@ -32,6 +33,10 @@ class TelegramBot:
         def _search(message):
             search(self.bot, message)
 
+        @self.bot.message_handler(['search'])
+        def _search2(message):
+            search2(self.bot, message)
+
         @self.bot.message_handler(['quality', 'q'])
         def _quality(message):
             quality(self.bot, message)
@@ -49,7 +54,6 @@ class TelegramBot:
 
         @self.bot.message_handler(func=lambda m: m.from_user and m.from_user.id == 777000)
         def _unpin(message):
-            print(message)
             try:
                 self.bot.unpin_chat_message(message.chat.id, message.message_id)
             except ApiException:
