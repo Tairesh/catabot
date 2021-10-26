@@ -6,3 +6,5 @@ __pycache__/
 /.idea/
 
 /changelog_posted.txt
+/data.json
+/data_version.txt
