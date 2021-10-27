@@ -225,7 +225,7 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
             text += f"Portions: {data['charges'] if 'charges' in data else 1}\n"
             text += f"Spoils In: {data['spoils_in'] if 'spoils_in' in data else 'never'}\n"
             text += f"Health: {data['healthy'] if 'healthy' in data else 0}\n"
-            text += f"Vitamins: {str(data['vitamins']) if 'vitamins' in data else 'None'}\n"
+            text += f"Vitamins: {', '.join(f'{v}: {p}%' for v, p in data['vitamins']) if 'vitamins' in data else 'None'}\n"
 
         # TODO: if data['type'] == 'WHEEL'
         # TODO: if 'seed_data' in data
