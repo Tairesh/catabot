@@ -8,9 +8,21 @@ from telebot import TeleBot
 from telebot.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from catabot import utils
-from catabot.commands.search import NUMBERS_EMOJI
 from download_data import ALL_DATA_FILE, DATA_VERSION_FILE
 
+
+NUMBERS_EMOJI = {
+    1: "1️⃣",
+    2: "2️⃣",
+    3: "3️⃣",
+    4: "4️⃣",
+    5: "5️⃣",
+    6: "6️⃣",
+    7: "7️⃣",
+    8: "8️⃣",
+    9: "9️⃣",
+    10: "🔟",
+}
 
 raw_data = {
     'version': None,
