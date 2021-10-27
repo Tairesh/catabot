@@ -353,7 +353,31 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
             if 'techniques' in data:
                 text += f"Techniques: {str(data['techniques'])}\n"
 
-        # TODO: pockets
+        if 'pocket_data' in data and any(data['pocket_data']):
+            text += "Pockets:\n"
+            for pocket in data['pocket_data']:
+                if 'pocket_type' in pocket and pocket['pocket_type'] == 'CONTAINER':
+                    text += pocket['max_contains_volume'] if 'max_contains_volume' in pocket else 'unlimited'
+                    text += ' / '
+                    text += pocket['max_contains_weight'] if 'max_contains_weight' in pocket else 'unlimited'
+                else:
+                    text += "non-container"
+
+                if 'ammo_restriction' in pocket:
+                    text += f" / ammo restrict: {str(pocket['ammo_restriction'])}"
+                if 'max_item_length' in pocket:
+                    text += ' / ' + pocket['max_item_length']
+                if 'min_item_volume' in pocket:
+                    text += ' / min ' + pocket['min_item_volume']
+                text += f" / moves: {pocket['moves'] if 'moves' in pocket else 100}"
+                if 'sealed_data' in pocket and 'spoil_multiplier' in pocket['sealed_data'] \
+                        and pocket['sealed_data']['spoil_multiplier'] != 1:
+                    text += f" / spoil multiplier: {pocket['sealed_data']['spoil_multiplier']}"
+                if 'flag_restriction' in pocket:
+                    text += f" / flag restrict: {str(pocket['flag_restriction'])}"
+                if 'item_restriction' in pocket:
+                    text += f" / item restrict: {str(pocket['item_restriction'])}"
+                text += '\n'
 
     markup = InlineKeyboardMarkup()
     row = [
