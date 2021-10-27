@@ -5,9 +5,8 @@ from telebot.apihelper import ApiException
 from telebot.types import User, Message, CallbackQuery
 
 from catabot import constants
-from catabot.commands.search import search, quality  # , btn_pressed
 from catabot.commands.release import get_release
-from catabot.commands.search2 import search2, btn_pressed
+from catabot.commands.search import search, btn_pressed
 
 
 def threaded(fn):
@@ -29,17 +28,12 @@ class TelegramBot:
         self.bot: TeleBot = TeleBot(token, skip_pending=clean)
         self.me: User = self.bot.get_me()
 
-        @self.bot.message_handler(['craft', 'c', 'item', 'i', 'disassemble', 'disasm', 'd', 'monster', 'mob', 'm'])
-        def _search(message):
+        @self.bot.message_handler(['search', 's', 'item', 'i',
+                                   'craft', 'c', 'recipe', 'r',
+                                   'disassemble', 'disasm', 'd', 'uncraft', 'u',
+                                   'monster', 'mob', 'm'])
+        def _search(message: Message):
             search(self.bot, message)
-
-        @self.bot.message_handler(['search'])
-        def _search2(message: Message):
-            search2(self.bot, message)
-
-        @self.bot.message_handler(['quality', 'q'])
-        def _quality(message):
-            quality(self.bot, message)
 
         @self.bot.callback_query_handler(func=lambda call: call.data)
         def _btn_pressed(call: CallbackQuery):

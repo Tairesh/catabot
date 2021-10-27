@@ -1,100 +1,146 @@
-import traceback
-import urllib.request
-import urllib.error
-from urllib.parse import quote
+import json
+import logging
+import math
+from collections import defaultdict
+from typing import List, Union
 
-from bs4 import BeautifulSoup
 from telebot import TeleBot
-from telebot.apihelper import ApiException
 from telebot.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from catabot import utils
-from catabot.utils import escape
+from catabot.commands.search import NUMBERS_EMOJI
+from download_data import ALL_DATA_FILE, DATA_VERSION_FILE
 
-CATADDA_SEARCH = "https://cdda-trunk.chezzo.com/search?q={}"
-CATADDA_LINK_START = "https://cdda-trunk.chezzo.com/"
 
-NUMBERS_EMOJI = {
-    1: "1️⃣",
-    2: "2️⃣",
-    3: "3️⃣",
-    4: "4️⃣",
-    5: "5️⃣",
-    6: "6️⃣",
-    7: "7️⃣",
-    8: "8️⃣",
-    9: "9️⃣",
-    10: "🔟",
+raw_data = {
+    'version': None,
+    'item': {},
+    'uncraft': {},
+    'recipe': {},
+    'material': {},
 }
 
 
-def _get_search_results(keyword, action):
-    results = []
-    req = urllib.request.Request(CATADDA_SEARCH.format(quote(keyword)), None,
-                                 {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64)'})
-    page = urllib.request.urlopen(req).read()
-    soup = BeautifulSoup(page, features="html.parser")
-    if action == 'monster':
-        ul = soup.find('ul', {"class": "list-unstyled"})
-        if ul:
-            lis = ul.findAll('li')
-            for li in lis:
-                a = li.find('a')
-                results.append((a.text, a["href"]))
+def _update_data():
+    version = open(DATA_VERSION_FILE, 'r').read()
+    if raw_data['version'] != version:
+        # typs = set()
+        for row in json.load(open(ALL_DATA_FILE, 'r'))['data']:
+            typ = _mapped_type(row['type'])
+            if typ == 'item':
+                if 'id' in row:
+                    row_id = row['id']
+                elif 'abstract' in row:
+                    row_id = row['abstract']
+                else:
+                    logging.warning('no id and no abstract: {}', row)
+                    continue
+                raw_data['item'][row_id] = row
+            elif typ == 'recipe':
+                if 'result' in row and 'category' in row and row['category'] != 'CC_BUILDING':
+                    raw_data['recipe'][row['result']] = row
+            elif typ == 'uncraft':
+                if 'result' in row:
+                    raw_data['uncraft'][row['result']] = row
+            elif typ == 'material':
+                if 'id' in row:
+                    row_id = row['id']
+                elif 'abstract' in row:
+                    row_id = row['abstract']
+                else:
+                    logging.warning('no id and no abstract: {}', row)
+                    continue
+                raw_data['material'][row_id] = row
+            # else:
+            #     typs.add(typ)
+        # print(typs)
+        for row in raw_data['item'].values():
+            if 'copy-from' in row:
+                _add_copy_from('item', row)
+        for row in raw_data['material'].values():
+            if 'copy-from' in row:
+                _add_copy_from('material', row)
+        for row in raw_data['recipe'].values():
+            if 'reversible' in row and row['reversible']:
+                raw_data['uncraft'][row['result']] = row
+        raw_data['version'] = version
+
+
+def _add_copy_from(typ: str, row: dict):
+    if 'copy-from' in row:
+        fr = raw_data[typ][row['copy-from']]
+        row.pop('copy-from')
+        for key in fr:
+            if key not in row and key != 'abstract':
+                row[key] = fr[key]
+        _add_copy_from(typ, row)
+
+
+def _name(row: dict) -> str:
+    if 'name' in row:
+        if isinstance(row['name'], str):
+            return row['name']
+        elif 'str' in row['name']:
+            return row['name']['str']
+        elif 'str_sp' in row['name']:
+            return row['name']['str_sp']
+    if 'id' in row:
+        return row['id']
+    return ''
+
+
+def _names(row: dict) -> List[str]:
+    names = []
+    if 'name' in row:
+        if isinstance(row['name'], str):
+            names.append(row['name'])
+        elif 'str' in row['name']:
+            names.append(row['name']['str'])
+        elif 'str_sp' in row['name']:
+            names.append(row['name']['str_sp'])
+    if 'id' in row:
+        names.append(row['id'])
+    return names
+
+
+def _match_row(row: dict, keyword: str) -> bool:
+    return any(keyword in n for n in _names(row))
+
+
+def _mapped_type(typ: str) -> str:
+    if typ in {"AMMO", "GUN", "ARMOR", "PET_ARMOR", "TOOL", "TOOLMOD", "TOOL_ARMOR", "BOOK",
+               "COMESTIBLE", "ENGINE", "WHEEL", "GUNMOD", "MAGAZINE", "BATTERY", "GENERIC", "BIONIC_ITEM"}:
+        return "item"
+    elif typ == "city_building":
+        return "overmap_special"
     else:
-        divs = soup.findAll('div', {"class": "row"})
-        for div in divs:
-            links = div.findAll('a')
-            if len(links):
-                text = f'<a href="{links[0]["href"]}"><b>{links[0].text}</b></a>'
-                link = links[0]["href"]
-                if action == 'craft':
-                    link += "/craft"
-                if action == 'disassemble':
-                    link += "/disassemble"
-                if len(links) > 1:
-                    for ll in links[1:]:
-                        text += f' <a href="{ll["href"]}">[{ll.text}]</a>'
-
-                results.append((text, link))
-    return results
+        return typ.lower()
 
 
-def _parse_link(bot: TeleBot, message: Message, url: str):
-    try:
-        req = urllib.request.Request(url, None, {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64)'})
-        page = urllib.request.urlopen(req).read()
-    except urllib.error.HTTPError as e:
-        text = "I can't load item page: {}".format(e)
-        bot.reply_to(message, text)
-        return
-
-    try:
-        soup = BeautifulSoup(page, features="html.parser")
-        div = soup.find('div', {"class": "row"}).find('div', {"class": "col-md-6"})
-        title = soup.find('h4') if '/monsters/' in url else soup.find('h1')
-
-        name = title.text
-        desc = div.text.replace('\n\n\n', '\n\n').replace('\n\n\n', '\n\n').replace('>', '\n  >')
-        text = f"<b>{escape(name)}</b><code>{escape(desc)}</code>"
-        if len(text) > 4096:
-            bot.reply_to(message, url)
-        else:
-            bot.reply_to(message, text, parse_mode='html')
-    except Exception:
-        bot.send_sticker(message.chat.id, 'CAADAgADyAADOtDfARL0PAOfBWJWFgQ', message.message_id)
-        traceback.print_exc()
+def _search_results(keyword: str) -> dict:
+    results_by_type = defaultdict(list)
+    for typ in {'item', }:
+        for row in raw_data[typ].values():
+            if 'id' in row and _match_row(row, keyword):
+                results_by_type[typ].append(row)
+    return results_by_type
 
 
-def _get_page_view(results, keyword, action, maxpage, page=1):
-    markup = InlineKeyboardMarkup(row_width=5)
-    desc = f"Search results for {action} {keyword}\n"
+def _page_view(results: list, keyword: str, action: str, page: int = 1) -> (str, InlineKeyboardMarkup):
+    maxpage = int(len(results) / 10)
+    results = results[(page - 1) * 10: page * 10:]
+
+    text = f"Search results for {action} {keyword}:\n\n"
     btns = []
-    for i, (text, link) in enumerate(results):
-        btn = InlineKeyboardButton(text=NUMBERS_EMOJI[i + 1], callback_data="cdda:" + link.replace(CATADDA_LINK_START, ''))
-        btns.append(btn)
-        desc += NUMBERS_EMOJI[i + 1] + ' ' + text + '\n'
-    desc += f"(page {page} of {maxpage+1})"
+
+    for i, row in enumerate(results):
+        btns.append(InlineKeyboardButton(
+            text=NUMBERS_EMOJI[i + 1],
+            callback_data=f"cdda:{action}:{row['id']}"
+        ))
+        text += f"{NUMBERS_EMOJI[i + 1]} {utils.escape(_name(row))} (<code>{row['id']}</code>)\n"
+    text += f"\n(page {page} of {maxpage+1})"
+    markup = InlineKeyboardMarkup(row_width=5)
     markup.add(*btns)
     btm_row = []
     if page > 1:
@@ -103,164 +149,342 @@ def _get_page_view(results, keyword, action, maxpage, page=1):
     if page <= maxpage:
         btm_row.append(InlineKeyboardButton(text="➡ Next️️", callback_data=f"cdda_page{page + 1}_{action}:{keyword}"))
     markup.add(*btm_row)
-    return desc, markup
+    return text, markup
 
 
-def _get_quality_results(key):
-    req = urllib.request.Request("https://cdda-trunk.chezzo.com/qualities/{}".format(quote(key)), None,
-                                 {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64)'})
-    page = urllib.request.urlopen(req).read()
-    soup = BeautifulSoup(page, features="html.parser")
-    table = soup.find('table', {'class': 'table table-bordered table-hover tablesorter'})
-
-    results = []
-    trs = table.findAll('tr')
-    for tr in trs:
-        tds = tr.findAll('td')
-        if len(tds) == 0:
-            continue
-
-        link = tds[1].find('a')
-        level = int(tds[2].text)
-        results.append((link.text, link['href'], level))
-    return results, soup
+def _parse_volume(vol: Union[str, int]) -> int:
+    if not vol:
+        return 0
+    if isinstance(vol, int):
+        return vol * 250
+    try:
+        if vol.lower().endswith("ml"):
+            return int(vol[:-2].strip())
+        if vol.lower().endswith("l"):
+            return int(vol[:-1].strip()) * 1000
+    except ValueError:
+        logging.warning("invalid volume: {}", vol)
+    return 0
 
 
-def _send_quality_results(bot, message, results, soup):
-    if len(results) > 0:
-        chunks = []
-        title = soup.find('ul', {'class': 'nav nav-pills nav-stacked'}).find('li', {'class': 'active'}).text
-        result = f"<b>Items with quality {title}:</b>\n"
-        for item, href, level in results:
-            row = f"<a href='{href}'>{item}</a>\n"
-            if len(result) + len(row) > 3000:
-                chunks.append(result)
-                result = row
-            else:
-                result += row
-        chunks.append(result)
-        for chunk in chunks:
-            bot.reply_to(message, chunk, parse_mode='HTML', disable_web_page_preview=True)
+def _parse_mass(weight: Union[str, int]) -> float:
+    if not weight:
+        return 0
+    if isinstance(weight, int):
+        return weight
+    try:
+        if weight.lower().endswith("mg"):
+            return int(weight[:-2].strip()) / 1000
+        if weight.lower().endswith("kg"):
+            return int(weight[:-2].strip()) * 1000
+        if weight.lower().endswith("g"):
+            return int(weight[:-1].strip())
+    except ValueError:
+        logging.warning("invalid weight: {}", weight)
+    return 0
+
+
+def _mpa(row: dict) -> int:
+    return math.floor(65 + math.floor(_parse_volume(row['volume']) / 62.5) + math.floor(_parse_mass(row['weight']) / 60.0))
+
+
+def _item_length(row: dict) -> str:
+    if 'longest_side' in row:
+        return row['longest_side']
+    return f"{round(_parse_volume(row['volume']) ** (1.0/3.0))} cm"
+
+
+def _compute_to_hit(to_hit: Union[int, dict]) -> int:
+    if isinstance(to_hit, int):
+        return to_hit
+    return -2 + {'bad': -1, 'none': 0, 'solid': 1, 'weapon': 2}[to_hit['grip']] + \
+        {'hand': 0, 'short': 1, 'long': 2}[to_hit['length']] + \
+        {'point': -2, 'line': -1, 'any': 0, 'every': 1}[to_hit['surface']] + \
+        {'clumsy': -2, 'uneven': -1, 'neutral': 0, 'good': 1}[to_hit['balance']]
+
+
+def _covers(row: dict, body_part: str) -> bool:
+    if 'covers' in row:
+        if body_part in row['covers']:
+            return True
+    if 'armor' in row:
+        if any(body_part in a['covers'] for a in row['armor']):
+            return True
+
+    return False
+
+
+def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
+    # this is basically a poor copy of https://github.com/nornagon/cdda-guide/blob/main/src/types/Item.svelte
+    data = raw_data['item'][row_id]
+    if raw:
+        text = f"<code>{json.dumps(data, indent=2)}</code>"
     else:
-        bot.send_sticker(message.chat.id, 'CAADAgADxgADOtDfAeLvpRcG6I1bFgQ', message.message_id)
+        text = f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{row_id}\">{utils.escape(_name(data))}</a>\n" \
+               f"<i>{data['description']}</i>\n\n" \
+               f"Materials: {', '.join(data['material']) if 'material' in data else 'None'}\n" \
+               f"Volume: {data['volume']}\n" \
+               f"Weight: {data['weight']}\n" \
+               f"Length: {_item_length(data)}\n" \
+               f"Flags: {', '.join(data['flags']) if 'flags' in data and len(data['flags']) > 0 else 'None'}\n"
+        # TODO: flags' descriptions
+        # TODO: ammo
+        # TODO: magazine_compatible
+        # TODO: faults
+        if 'qualities' in data:
+            # TODO: qualities' names
+            text += f"Qualities: {str(data['qualities'])}\n"
+        # TODO: vehicle parts
+        # TODO: ascii_picture
+
+        # TODO: if data['type'] == 'BOOK'
+        if data['type'] in {'ARMOR', 'TOOL_ARMOR'}:
+            text += "\nArmor:\n"
+            text += "Covers: "
+            covers = ""
+            if _covers(data, "head"):
+                covers += "The head. "
+            if _covers(data, "eyes"):
+                covers += "The eyes. "
+            if _covers(data, "mouth"):
+                covers += "The mouth. "
+            if _covers(data, "torso"):
+                covers += "The torso. "
+            for sg, pl in [("arm", "arms"), ("hand", "hands"), ("leg", "legs"), ("foot", "feet")]:
+                if 'sided' in data and data['sided'] and (_covers(data, sg+'_l') or _covers(data, sg+'_r')):
+                    covers += f"Either {sg}. "
+                elif _covers(data, sg+'_l') and _covers(data, sg+'_r'):
+                    covers += f"The {pl}. "
+                elif _covers(data, sg+'_l'):
+                    covers += f"The left {sg}. "
+                elif _covers(data, sg+'_r'):
+                    covers += f"The right {sg}. "
+            if not covers:
+                covers = "Nothing."
+            text += covers + '\n'
+            text += "Layer: "
+            flags = data['flags'] if 'flags' in data else []
+            if 'PERSONAL' in flags:
+                text += "Personal aura"
+            elif 'SKINTIGHT' in flags:
+                text += "Close to skin"
+            elif 'BELTED' in flags:
+                text += "Strapped"
+            elif 'OUTER' in flags:
+                text += "Outer"
+            elif 'WAIST' in flags:
+                text += "Waist"
+            elif 'AURA' in flags:
+                text += "Outer aura"
+            else:
+                text += "Normal"
+            text += f"\nWarmth: {data['warmth'] if 'warmth' in data else 0}\n"
+            if 'armor' in data:
+                text += "Encumbrance:\n"
+                for apd in data['armor']:
+                    text += f"<b>{', '.join(apd['covers'])}:</b> "
+                    text += str(apd['encumbrance']) if isinstance(apd['encumbrance'], int) else \
+                        f"{apd['encumbrance'][0]} ({apd['encumbrance'][1]} when full)"
+                    text += "\n"
+            else:
+                text += f"Encumbrance: {data['encumbrance'] if 'encumbrance' in data else 0}"
+                if 'max_encumbrance' in data:
+                    text += f" ({data['max_encumbrance']} when full)"
+                text += "\n"
+
+            text += "Coverage: "
+            if 'armor' in data:
+                text += '\n'
+                for apd in data['armor']:
+                    text += f"<b>{', '.join(apd['covers'])}:</b> "
+                    text += f"{apd['coverage'] if 'coverage' in apd else 0}%\n"
+            else:
+                text += f"{data['coverage'] if 'coverage' in data else 0}\n"
+            if 'environmental_protection' in data or ('material' in data and len(data['material']) > 0):
+                text += "Protection:\n"
+                env = data['environmental_protection'] if 'environmental_protection' in data else 0
+                thickness = data['material_thickness'] if 'material_thickness' in data else 0
+                if 'material' in data:
+                    materials = [data['material']] if isinstance(data['material'], str) else data['material']
+
+                    def _resist_sum(r) -> int:
+                        return sum(raw_data['material'][m][r] for m in materials if r in raw_data['material'][m])
+
+                    bash = (_resist_sum('bash_resist') * thickness) / len(materials)
+                    cut = (_resist_sum('cut_resist') * thickness) / len(materials)
+                    bullet = (_resist_sum('bullet_resist') * thickness) / len(materials)
+                    acid = _resist_sum('acid_resist') / len(materials)
+                    fire = _resist_sum('fire_resist') / len(materials)
+                    if env < 10:
+                        acid *= env / 10
+                        fire *= env / 10
+                    text += f"Bash: {bash:.2}\n"
+                    text += f"Cut: {cut:.2}\n"
+                    text += f"Ballistic: {bullet:.2}\n"
+                    text += f"Acid: {acid:.2}\n"
+                    text += f"Fire: {fire:.2}\n"
+                text += f"Environmental: {env}\n"
+
+        # TODO: if data['type'] in {'TOOL', 'TOOL_ARMOR'}
+        # TODO: if data['type'] == 'ENGINE'
+        if data['type'] == 'COMESTIBLE':
+            text += "\nComestible:\n"
+            text += f"Calories: {data['calories'] if 'calories' in data else 0} kcal\n"
+            text += f"Quench: {data['quench'] if 'quench' in data else 0}\n"
+            text += f"Enjoyability: {data['fun'] if 'fun' in data else 0}\n"
+            text += f"Portions: {data['charges'] if 'charges' in data else 1}\n"
+            text += f"Spoils In: {data['spoils_in'] if 'spoils_in' in data else 'never'}\n"
+            text += f"Health: {data['healthy'] if 'healthy' in data else 0}\n"
+            text += f"Vitamins: {', '.join(f'{v}: {p}%' for v, p in data['vitamins']) if 'vitamins' in data else 'None'}\n"
+
+        # TODO: if data['type'] == 'WHEEL'
+        # TODO: if 'seed_data' in data
+
+        if 'bashing' in data or 'cutting' in data or data['type'] in {"GUN", "AMMO"}:
+            text += "\nMelee:\n"
+            text += f"Bash: {data['bashing'] if 'bashing' in data else 0}\n"
+            if 'SPEAR' in data['flags'] or 'STAB' in data['flags']:
+                text += "Pierce: "
+            else:
+                text += "Cut: "
+            text += str(data['cutting'] if 'cutting' in data else 0)
+            text += f"\nTo Hit: {_compute_to_hit(data['to_hit']) if 'to_hit' in data else 0}"
+            text += f"\nMoves Per Attack: {_mpa(data)}\n"
+            if 'techniques' in data:
+                text += f"Techniques: {str(data['techniques'])}\n"
+
+        if 'pocket_data' in data and any(data['pocket_data']):
+            text += "Pockets:\n"
+            for pocket in data['pocket_data']:
+                if 'pocket_type' in pocket and pocket['pocket_type'] == 'CONTAINER':
+                    text += pocket['max_contains_volume'] if 'max_contains_volume' in pocket else 'unlimited'
+                    text += ' / '
+                    text += pocket['max_contains_weight'] if 'max_contains_weight' in pocket else 'unlimited'
+                else:
+                    text += "non-container"
+
+                if 'ammo_restriction' in pocket:
+                    text += f" / ammo restrict: {str(pocket['ammo_restriction'])}"
+                if 'max_item_length' in pocket:
+                    text += ' / ' + pocket['max_item_length']
+                if 'min_item_volume' in pocket:
+                    text += ' / min ' + pocket['min_item_volume']
+                text += f" / moves: {pocket['moves'] if 'moves' in pocket else 100}"
+                if 'sealed_data' in pocket and 'spoil_multiplier' in pocket['sealed_data'] \
+                        and pocket['sealed_data']['spoil_multiplier'] != 1:
+                    text += f" / spoil multiplier: {pocket['sealed_data']['spoil_multiplier']}"
+                if 'flag_restriction' in pocket:
+                    text += f" / flag restrict: {str(pocket['flag_restriction'])}"
+                if 'item_restriction' in pocket:
+                    text += f" / item restrict: {str(pocket['item_restriction'])}"
+                text += '\n'
+
+    markup = InlineKeyboardMarkup()
+    buttons = [
+        InlineKeyboardButton("👀 Description", callback_data=f"cdda:view:{row_id}")
+        if raw else
+        InlineKeyboardButton('🔣 Raw JSON', callback_data=f"cdda:item_raw:{row_id}")
+    ]
+    if row_id in raw_data['recipe']:
+        buttons.append(InlineKeyboardButton("🛠 Craft", callback_data=f"cdda:craft:{row_id}"))
+    if row_id in raw_data['uncraft']:
+        buttons.append(InlineKeyboardButton("🛠 Deconstruct", callback_data=f"cdda:uncraft:{row_id}"))
+    markup.add(*buttons)
+    return text, markup
 
 
-def quality(bot: TeleBot, message: Message):
-    bot.send_chat_action(message.chat.id, 'typing')
-    keyword = utils.get_keyword(message).upper()
-    if not keyword:
-        cmd = utils.get_command(message)
-        bot.reply_to(message, f"Usage example: `/{cmd} fine metal sawing`", parse_mode='Markdown')
-        return
+def _action_view(action: str, row_id: str) -> (str, InlineKeyboardMarkup):
+    if action == 'view':
+        return _view_item(row_id)
+    elif action == 'item_raw':
+        return _view_item(row_id, True)
+    # TODO: craft and uncraft views
+    # TODO: monster view
 
-    tmp_message = bot.reply_to(message, "Loading search results...")
+    typ = 'item'
+    if action == 'monster':
+        typ = 'monster'
+    elif action == 'craft':
+        typ = 'recipe'
+    elif action == 'uncraft':
+        typ = 'uncraft'
 
-    try:
-        results, soup = _get_quality_results(keyword)
-        if len(results) == 0:
-            ul = soup.find('ul', {'class': 'nav nav-pills nav-stacked'})
-            qualities = list(filter(lambda kn: keyword.lower() == kn[0].lower() or keyword.lower() in kn[1].lower(),
-                                    [(li.find('a')['href'].split('/').pop(), li.text) for li in ul.findAll('li')]))
-            if len(qualities) == 1:
-                results, soup = _get_quality_results(qualities[0][0].upper())
-            elif len(qualities) > 1:
-                bot.reply_to(message, "Choose quality:", reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton(name, callback_data='cdda_quality:'+key)] for key, name in qualities
-                ]))
-                try:
-                    bot.delete_message(message.chat.id, tmp_message.message_id)
-                except ApiException:
-                    pass
-                return
+    markup = InlineKeyboardMarkup()
+    buttons = []
+    if action == 'view':
+        if row_id in raw_data['recipe']:
+            buttons.append(InlineKeyboardButton("🛠 Craft", callback_data=f"cdda:craft:{row_id}"))
+        if row_id in raw_data['uncraft']:
+            buttons.append(InlineKeyboardButton("🛠 Deconstruct", callback_data=f"cdda:uncraft:{row_id}"))
+    elif action == 'craft':
+        buttons.append(InlineKeyboardButton("👀 Description", callback_data=f"cdda:view:{row_id}"))
+        if row_id in raw_data['uncraft']:
+            buttons.append(InlineKeyboardButton("🛠 Deconstruct", callback_data=f"cdda:uncraft:{row_id}"))
+    elif action == 'uncraft':
+        buttons.append(InlineKeyboardButton("👀 Description", callback_data=f"cdda:view:{row_id}"))
+        if row_id in raw_data['recipe']:
+            buttons.append(InlineKeyboardButton("🛠 Craft", callback_data=f"cdda:craft:{row_id}"))
+    markup.add(*buttons)
 
-        _send_quality_results(bot, message, results, soup)
-
-    except urllib.error.HTTPError as e:
-        bot.reply_to(message, "I can't load search page: {}".format(e))
-
-    try:
-        bot.delete_message(message.chat.id, tmp_message.message_id)
-    except ApiException:
-        pass
+    data = raw_data[typ][row_id]
+    return f"<code>{json.dumps(data, indent=2)}</code>", markup
 
 
 def search(bot: TeleBot, message: Message):
     bot.send_chat_action(message.chat.id, 'typing')
+    _update_data()
     keyword = utils.get_keyword(message)
     command = utils.get_command(message).lower()
-    action = 'view'
+    if not keyword:
+        bot.reply_to(message, f"Usage example:\n<code>{command} glazed tenderloins</code>", parse_mode='html')
+        return
 
+    action = 'view'
+    typ = 'item'
+    # TODO: use match
     if command in {'/c', '/craft'}:
         action = 'craft'
-    if command in {'/disassemble', '/d', '/disasm'}:
-        action = 'disassemble'
-    if command in {'/m', '/mob', '/monster'}:
+    elif command in {'/disassemble', '/d', '/disasm'}:
+        action = 'uncraft'
+    elif command in {'/m', '/mob', '/monster'}:
         action = 'monster'
-        example = 'your mom'
-    else:
-        example = 'glazed tenderloins'
-
-    if not keyword:
-        bot.reply_to(message, f"Usage example:\n<code>{command} {example}</code>", parse_mode='html')
-        return
+        typ = 'monster'
 
     tmp_message = bot.reply_to(message, "Loading search results...")
 
-    try:
-        results = _get_search_results(keyword, action)
+    results = _search_results(keyword)
+    if len(results[typ]) == 0:
+        bot.send_sticker(message.chat.id, 'CAADAgADxgADOtDfAeLvpRcG6I1bFgQ', message.message_id)
+    elif len(results[typ]) == 1:
+        text, markup = _action_view(action, results[typ][0]['id'])
+        bot.reply_to(message, text, reply_markup=markup, parse_mode='HTML')
+    else:
+        text, markup = _page_view(results[typ], keyword, action)
+        bot.reply_to(message, text, reply_markup=markup, parse_mode='HTML')
 
-        count = len(results)
-        if count == 0:
-            bot.send_sticker(message.chat.id, 'CAADAgADxgADOtDfAeLvpRcG6I1bFgQ', message.message_id)
-        elif count == 1:
-            _parse_link(bot, message, results[0][1])
-        else:
-            desc, markup = _get_page_view(results[0:10:], keyword, action, maxpage=int(count/10))
-            bot.reply_to(message, desc, reply_markup=markup, parse_mode='HTML', disable_web_page_preview=True)
-
-    except urllib.error.HTTPError as e:
-        print(e)
-        bot.reply_to(message, "I can't load search page: {}".format(e))
-
-    try:
-        bot.delete_message(message.chat.id, tmp_message.message_id)
-    except ApiException:
-        pass
+    utils.delete_message(bot, tmp_message)
 
 
 def btn_pressed(bot: TeleBot, message: Message, data: str):
-    bot.send_chat_action(message.chat.id, 'typing')
     if data.startswith('cdda:'):
-        try:
-            bot.delete_message(message.chat.id, message.message_id)
-        except ApiException:
-            pass
-        data = data[5::]
-        url = CATADDA_LINK_START + data
-        _parse_link(bot, message.reply_to_message, url)
-    elif data.startswith('cdda_quality:'):
-        try:
-            bot.delete_message(message.chat.id, message.message_id)
-        except ApiException:
-            pass
-        key = data.split(':').pop().upper()
-        results, soup = _get_quality_results(key)
-        _send_quality_results(bot, message.reply_to_message, results, soup)
+        bot.send_chat_action(message.chat.id, 'typing')
+        _update_data()
+        utils.delete_message(bot, message)
+        action, row_id = data[5::].split(':')
+        text, markup = _action_view(action, row_id)
+        bot.reply_to(message.reply_to_message, text, reply_markup=markup, parse_mode='HTML')
     elif data == 'cdda_cancel':
         bot.edit_message_text(message.text.split('\n')[0] + '\n(canceled)', message.chat.id, message.message_id)
     elif data.startswith('cdda_page'):
+        _update_data()
         page, actkey = data[9::].split('_')
         action, keyword = actkey.split(':')
         page = int(page)
         if page < 1:
             return
-        results = _get_search_results(keyword, action)
-        count = len(results)
-        results = results[(page-1)*10:page*10:]
-        if len(results) == 0:
-            return
-        desc, markup = _get_page_view(results, keyword, action, maxpage=int(count/10), page=page)
-        try:
-            bot.edit_message_text(desc, message.chat.id, message.message_id, reply_markup=markup, parse_mode='HTML')
-        except ApiException:
-            pass
+        results = _search_results(keyword)
+        typ = 'item'
+        if action == 'monster':
+            typ = 'monster'
+        text, markup = _page_view(results[typ], keyword, action, page=page)
+        bot.edit_message_text(text, message.chat.id, message.message_id, reply_markup=markup, parse_mode='HTML')
