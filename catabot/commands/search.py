@@ -1,7 +1,6 @@
 import json
 import logging
 import math
-from collections import defaultdict
 from typing import List, Union
 
 from telebot import TeleBot
@@ -30,6 +29,7 @@ raw_data = {
     'uncraft': {},
     'recipe': {},
     'material': {},
+    'monster': {},
 }
 
 
@@ -63,15 +63,22 @@ def _update_data():
                     logging.warning('no id and no abstract: {}', row)
                     continue
                 raw_data['material'][row_id] = row
+            elif typ == 'monster':
+                if 'id' in row:
+                    row_id = row['id']
+                elif 'abstract' in row:
+                    row_id = row['abstract']
+                else:
+                    logging.warning('no id and no abstract: {}', row)
+                    continue
+                raw_data['monster'][row_id] = row
             # else:
             #     typs.add(typ)
         # print(typs)
-        for row in raw_data['item'].values():
-            if 'copy-from' in row:
-                _add_copy_from('item', row)
-        for row in raw_data['material'].values():
-            if 'copy-from' in row:
-                _add_copy_from('material', row)
+        for typ in {'item', 'material', 'monster'}:
+            for row in raw_data[typ].values():
+                if 'copy-from' in row:
+                    _add_copy_from(typ, row)
         for row in raw_data['recipe'].values():
             if 'reversible' in row and row['reversible']:
                 raw_data['uncraft'][row['result']] = row
@@ -129,13 +136,12 @@ def _mapped_type(typ: str) -> str:
         return typ.lower()
 
 
-def _search_results(keyword: str) -> dict:
-    results_by_type = defaultdict(list)
-    for typ in {'item', }:
-        for row in raw_data[typ].values():
-            if 'id' in row and _match_row(row, keyword):
-                results_by_type[typ].append(row)
-    return results_by_type
+def _search_results(typ, keyword: str) -> list:
+    results = []
+    for row in raw_data[typ].values():
+        if 'id' in row and _match_row(row, keyword):
+            results.append(row)
+    return results
 
 
 def _page_view(results: list, keyword: str, action: str, page: int = 1) -> (str, InlineKeyboardMarkup):
@@ -464,14 +470,14 @@ def search(bot: TeleBot, message: Message):
 
     tmp_message = bot.reply_to(message, "Loading search results...")
 
-    results = _search_results(keyword)
-    if len(results[typ]) == 0:
+    results = _search_results(typ, keyword)
+    if len(results) == 0:
         bot.send_sticker(message.chat.id, 'CAADAgADxgADOtDfAeLvpRcG6I1bFgQ', message.message_id)
-    elif len(results[typ]) == 1:
-        text, markup = _action_view(action, results[typ][0]['id'])
+    elif len(results) == 1:
+        text, markup = _action_view(action, results[0]['id'])
         bot.reply_to(message, text, reply_markup=markup, parse_mode='HTML')
     else:
-        text, markup = _page_view(results[typ], keyword, action)
+        text, markup = _page_view(results, keyword, action)
         bot.reply_to(message, text, reply_markup=markup, parse_mode='HTML')
 
     utils.delete_message(bot, tmp_message)
@@ -494,9 +500,9 @@ def btn_pressed(bot: TeleBot, message: Message, data: str):
         page = int(page)
         if page < 1:
             return
-        results = _search_results(keyword)
         typ = 'item'
         if action == 'monster':
             typ = 'monster'
-        text, markup = _page_view(results[typ], keyword, action, page=page)
+        results = _search_results(typ, keyword)
+        text, markup = _page_view(results, keyword, action, page=page)
         bot.edit_message_text(text, message.chat.id, message.message_id, reply_markup=markup, parse_mode='HTML')
