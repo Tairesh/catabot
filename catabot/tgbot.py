@@ -2,7 +2,7 @@ import threading
 
 from telebot import TeleBot
 from telebot.apihelper import ApiException
-from telebot.types import User
+from telebot.types import User, Message, CallbackQuery
 
 from catabot import constants
 from catabot.commands.search import search, quality  # , btn_pressed
@@ -34,7 +34,7 @@ class TelegramBot:
             search(self.bot, message)
 
         @self.bot.message_handler(['search'])
-        def _search2(message):
+        def _search2(message: Message):
             search2(self.bot, message)
 
         @self.bot.message_handler(['quality', 'q'])
@@ -42,9 +42,10 @@ class TelegramBot:
             quality(self.bot, message)
 
         @self.bot.callback_query_handler(func=lambda call: call.data)
-        def _btn_pressed(call):
+        def _btn_pressed(call: CallbackQuery):
             if call.message and call.message.reply_to_message:
                 if call.message.reply_to_message.from_user.id != call.from_user.id:
+                    self.bot.answer_callback_query(call.id, "Эти кнопки только для того кто вызвал команду", True)
                     return
             btn_pressed(self.bot, call.message, call.data)
 

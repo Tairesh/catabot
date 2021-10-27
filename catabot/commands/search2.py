@@ -322,6 +322,7 @@ def search2(bot: TeleBot, message: Message):
 def btn_pressed(bot: TeleBot, message: Message, data: str):
     if data.startswith('cdda:'):
         bot.send_chat_action(message.chat.id, 'typing')
+        _update_data()
         utils.delete_message(bot, message)
         action, row_id = data[5::].split(':')
         text, markup = _action_view(action, row_id)
@@ -329,6 +330,7 @@ def btn_pressed(bot: TeleBot, message: Message, data: str):
     elif data == 'cdda_cancel':
         bot.edit_message_text(message.text.split('\n')[0] + '\n(canceled)', message.chat.id, message.message_id)
     elif data.startswith('cdda_page'):
+        _update_data()
         page, actkey = data[9::].split('_')
         action, keyword = actkey.split(':')
         page = int(page)
