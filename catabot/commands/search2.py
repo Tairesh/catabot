@@ -218,7 +218,7 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
     # this is basically a poor copy of https://github.com/nornagon/cdda-guide/blob/main/src/types/Item.svelte
     data = raw_data['item'][row_id]
     if raw:
-        text = f"<code>{str(data)}</code>"
+        text = f"<code>{json.dumps(data, indent=2)}</code>"
     else:
         text = f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{row_id}\">{utils.escape(_name(data))}</a>\n" \
                f"<i>{data['description']}</i>\n\n" \
@@ -425,7 +425,7 @@ def _action_view(action: str, row_id: str) -> (str, InlineKeyboardMarkup):
             markup.add(InlineKeyboardButton("🛠 Craft", callback_data=f"cdda:craft:{row_id}"))
 
     data = raw_data[typ][row_id]
-    return f"<code>{str(data)}</code>", markup
+    return f"<code>{json.dumps(data, indent=2)}</code>", markup
 
 
 def search2(bot: TeleBot, message: Message):
