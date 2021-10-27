@@ -17,6 +17,7 @@ raw_data = {
     'item': {},
     'uncraft': {},
     'recipe': {},
+    'material': {},
 }
 
 
@@ -41,26 +42,38 @@ def _update_data():
             elif typ == 'uncraft':
                 if 'result' in row:
                     raw_data['uncraft'][row['result']] = row
+            elif typ == 'material':
+                if 'id' in row:
+                    row_id = row['id']
+                elif 'abstract' in row:
+                    row_id = row['abstract']
+                else:
+                    logging.warning('no id and no abstract: {}', row)
+                    continue
+                raw_data['material'][row_id] = row
             # else:
             #     typs.add(typ)
         # print(typs)
         for row in raw_data['item'].values():
             if 'copy-from' in row:
-                _add_copy_from(row)
+                _add_copy_from('item', row)
+        for row in raw_data['material'].values():
+            if 'copy-from' in row:
+                _add_copy_from('material', row)
         for row in raw_data['recipe'].values():
             if 'reversible' in row and row['reversible']:
                 raw_data['uncraft'][row['result']] = row
         raw_data['version'] = version
 
 
-def _add_copy_from(row: dict):
+def _add_copy_from(typ: str, row: dict):
     if 'copy-from' in row:
-        fr = raw_data['item'][row['copy-from']]
+        fr = raw_data[typ][row['copy-from']]
         row.pop('copy-from')
         for key in fr:
             if key not in row and key != 'abstract':
                 row[key] = fr[key]
-        _add_copy_from(row)
+        _add_copy_from(typ, row)
 
 
 def _name(row: dict) -> str:
@@ -190,6 +203,17 @@ def _compute_to_hit(to_hit: Union[int, dict]) -> int:
         {'clumsy': -2, 'uneven': -1, 'neutral': 0, 'good': 1}[to_hit['balance']]
 
 
+def _covers(row: dict, body_part: str) -> bool:
+    if 'covers' in row:
+        if body_part in row['covers']:
+            return True
+    if 'armor' in row:
+        if any(body_part in a['covers'] for a in row['armor']):
+            return True
+
+    return False
+
+
 def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
     # this is basically a poor copy of https://github.com/nornagon/cdda-guide/blob/main/src/types/Item.svelte
     data = raw_data['item'][row_id]
@@ -214,7 +238,93 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
         # TODO: ascii_picture
 
         # TODO: if data['type'] == 'BOOK'
-        # TODO: if data['type'] in {'ARMOR', 'TOOL_ARMOR'}
+        if data['type'] in {'ARMOR', 'TOOL_ARMOR'}:
+            text += "\nArmor:\n"
+            text += "Covers: "
+            covers = ""
+            if _covers(data, "head"):
+                covers += "The head. "
+            if _covers(data, "eyes"):
+                covers += "The eyes. "
+            if _covers(data, "mouth"):
+                covers += "The mouth. "
+            if _covers(data, "torso"):
+                covers += "The torso. "
+            for sg, pl in [("arm", "arms"), ("hand", "hands"), ("leg", "legs"), ("foot", "feet")]:
+                if 'sided' in data and data['sided'] and (_covers(data, sg+'_l') or _covers(data, sg+'_r')):
+                    covers += f"Either {sg}. "
+                elif _covers(data, sg+'_l') and _covers(data, sg+'_r'):
+                    covers += f"The {pl}. "
+                elif _covers(data, sg+'_l'):
+                    covers += f"The left {sg}. "
+                elif _covers(data, sg+'_r'):
+                    covers += f"The right {sg}. "
+            if not covers:
+                covers = "Nothing."
+            text += covers + '\n'
+            text += "Layer: "
+            flags = data['flags'] if 'flags' in data else []
+            if 'PERSONAL' in flags:
+                text += "Personal aura"
+            elif 'SKINTIGHT' in flags:
+                text += "Close to skin"
+            elif 'BELTED' in flags:
+                text += "Strapped"
+            elif 'OUTER' in flags:
+                text += "Outer"
+            elif 'WAIST' in flags:
+                text += "Waist"
+            elif 'AURA' in flags:
+                text += "Outer aura"
+            else:
+                text += "Normal"
+            text += f"\nWarmth: {data['warmth'] if 'warmth' in data else 0}\n"
+            if 'armor' in data:
+                text += "Encumbrance:\n"
+                for apd in data['armor']:
+                    text += f"<b>{', '.join(apd['covers'])}:</b> "
+                    text += str(apd['encumbrance']) if isinstance(apd['encumbrance'], int) else \
+                        f"{apd['encumbrance'][0]} ({apd['encumbrance'][1]} when full)"
+                    text += "\n"
+            else:
+                text += f"Encumbrance: {data['encumbrance'] if 'encumbrance' in data else 0}"
+                if 'max_encumbrance' in data:
+                    text += f" ({data['max_encumbrance']} when full)"
+                text += "\n"
+
+            text += "Coverage: "
+            if 'armor' in data:
+                text += '\n'
+                for apd in data['armor']:
+                    text += f"<b>{', '.join(apd['covers'])}:</b> "
+                    text += f"{apd['coverage'] if 'coverage' in apd else 0}%\n"
+            else:
+                text += f"{data['coverage'] if 'coverage' in data else 0}\n"
+            if 'environmental_protection' in data or ('material' in data and len(data['material']) > 0):
+                text += "Protection:\n"
+                env = data['environmental_protection'] if 'environmental_protection' in data else 0
+                thickness = data['material_thickness'] if 'material_thickness' in data else 0
+                if 'material' in data:
+                    materials = [data['material']] if isinstance(data['material'], str) else data['material']
+
+                    def _resist_sum(r) -> int:
+                        return sum(raw_data['material'][m][r] for m in materials if r in raw_data['material'][m])
+
+                    bash = (_resist_sum('bash_resist') * thickness) / len(materials)
+                    cut = (_resist_sum('cut_resist') * thickness) / len(materials)
+                    bullet = (_resist_sum('bullet_resist') * thickness) / len(materials)
+                    acid = _resist_sum('acid_resist') / len(materials)
+                    fire = _resist_sum('fire_resist') / len(materials)
+                    if env < 10:
+                        acid *= env / 10
+                        fire *= env / 10
+                    text += f"Bash: {bash:.2}\n"
+                    text += f"Cut: {cut:.2}\n"
+                    text += f"Ballistic: {bullet:.2}\n"
+                    text += f"Acid: {acid:.2}\n"
+                    text += f"Fire: {fire:.2}\n"
+                text += f"Environmental: {env}\n"
+
         # TODO: if data['type'] in {'TOOL', 'TOOL_ARMOR'}
         # TODO: if data['type'] == 'ENGINE'
         if data['type'] == 'COMESTIBLE':
