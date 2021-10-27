@@ -43,6 +43,6 @@ def get_releases() -> Iterator[Release]:
             if commit['sha'] == release.prev_commit:
                 break
             if started:
-                release.commit_messages.append(commit['commit']['message'])
+                release.commit_messages.append(commit['commit']['message'].split('\n')[0])
 
     return reversed(result)
