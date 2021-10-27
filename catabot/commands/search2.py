@@ -1,7 +1,8 @@
 import json
 import logging
+import math
 from collections import defaultdict
-from typing import List
+from typing import List, Union
 
 from telebot import TeleBot
 from telebot.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
@@ -46,6 +47,9 @@ def _update_data():
         for row in raw_data['item'].values():
             if 'copy-from' in row:
                 _add_copy_from(row)
+        for row in raw_data['recipe'].values():
+            if 'reversible' in row and row['reversible']:
+                raw_data['uncraft'][row['result']] = row
         raw_data['version'] = version
 
 
@@ -135,7 +139,124 @@ def _page_view(results: list, keyword: str, action: str, page: int = 1) -> (str,
     return text, markup
 
 
+def _parse_volume(vol: Union[str, int]) -> int:
+    if not vol:
+        return 0
+    if isinstance(vol, int):
+        return vol * 250
+    try:
+        if vol.lower().endswith("ml"):
+            return int(vol[:-2].strip())
+        if vol.lower().endswith("l"):
+            return int(vol[:-1].strip()) * 1000
+    except ValueError:
+        logging.warning("invalid volume: {}", vol)
+    return 0
+
+
+def _parse_mass(weight: Union[str, int]) -> float:
+    if not weight:
+        return 0
+    if isinstance(weight, int):
+        return weight
+    try:
+        if weight.lower().endswith("mg"):
+            return int(weight[:-2].strip()) / 1000
+        if weight.lower().endswith("kg"):
+            return int(weight[:-2].strip()) * 1000
+        if weight.lower().endswith("g"):
+            return int(weight[:-1].strip())
+    except ValueError:
+        logging.warning("invalid weight: {}", weight)
+    return 0
+
+
+def _mpa(row: dict) -> int:
+    return math.floor(65 + math.floor(_parse_volume(row['volume']) / 62.5) + math.floor(_parse_mass(row['weight']) / 60.0))
+
+
+def _item_length(row: dict) -> str:
+    if 'longest_side' in row:
+        return row['longest_side']
+    return f"{round(_parse_volume(row['volume']) ** (1.0/3.0))} cm"
+
+
+def _compute_to_hit(to_hit: Union[int, dict]) -> int:
+    if isinstance(to_hit, int):
+        return to_hit
+    return -2 + {'bad': -1, 'none': 0, 'solid': 1, 'weapon': 2}[to_hit['grip']] + \
+        {'hand': 0, 'short': 1, 'long': 2}[to_hit['length']] + \
+        {'point': -2, 'line': -1, 'any': 0, 'every': 1}[to_hit['surface']] + \
+        {'clumsy': -2, 'uneven': -1, 'neutral': 0, 'good': 1}[to_hit['balance']]
+
+
+def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
+    # this is basically a poor copy of https://github.com/nornagon/cdda-guide/blob/main/src/types/Item.svelte
+    data = raw_data['item'][row_id]
+    if raw:
+        text = f"<code>{str(data)}</code>"
+    else:
+        text = f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{row_id}\">{utils.escape(_name(data))}</a>\n" \
+               f"<i>{data['description']}</i>\n\n" \
+               f"Materials: {', '.join(data['material']) if 'material' in data else 'None'}\n" \
+               f"Volume: {data['volume']}\n" \
+               f"Weight: {data['weight']}\n" \
+               f"Length: {_item_length(data)}\n" \
+               f"Flags: {', '.join(data['flags']) if 'flags' in data and len(data['flags']) > 0 else 'None'}\n"
+        # TODO: flags' descriptions
+        # TODO: ammo
+        # TODO: magazine_compatible
+        # TODO: faults
+        if 'qualities' in data:
+            # TODO: qualities' names
+            text += f"Qualities: {str(data['qualities'])}\n"
+        # TODO: vehicle parts
+        # TODO: ascii_picture
+
+        # TODO: if data['type'] == 'BOOK'
+        # TODO: if data['type'] in {'ARMOR', 'TOOL_ARMOR'}
+        # TODO: if data['type'] in {'TOOL', 'TOOL_ARMOR'}
+        # TODO: if data['type'] == 'ENGINE'
+        # TODO: if data['type'] == 'COMESTIBLE'
+        # TODO: if data['type'] == 'WHEEL'
+        # TODO: if 'seed_data' in data
+
+        if 'bashing' in data or 'cutting' in data or data['type'] in {"GUN", "AMMO"}:
+            text += f"Bash: {data['bashing'] if 'bashing' in data else 0} | "
+            if 'SPEAR' in data['flags'] or 'STAB' in data['flags']:
+                text += "Pierce: "
+            else:
+                text += "Cut: "
+            text += str(data['cutting'] if 'cutting' in data else 0)
+            text += f" | To Hit: {_compute_to_hit(data['to_hit']) if 'to_hit' in data else 0}"
+            text += f" | Moves Per Attack: {_mpa(data)}"
+            if 'techniques' in data:
+                text += f" | Techniques: {str(data['techniques'])}"
+
+        # TODO: pockets
+
+    markup = InlineKeyboardMarkup()
+    row = [
+        InlineKeyboardButton("👀 Description", callback_data=f"cdda:view:{row_id}")
+        if raw else
+        InlineKeyboardButton('🔣 Raw JSON', callback_data=f"cdda:item_raw:{row_id}")
+    ]
+    if row_id in raw_data['recipe']:
+        row.append(InlineKeyboardButton("🛠 Craft", callback_data=f"cdda:craft:{row_id}"))
+    if row_id in raw_data['uncraft']:
+        row.append(InlineKeyboardButton("🛠 Deconstruct", callback_data=f"cdda:uncraft:{row_id}"))
+    markup.add(*row)
+    return text, markup
+
+
 def _action_view(action: str, row_id: str) -> (str, InlineKeyboardMarkup):
+    if action == 'view':
+        return _view_item(row_id)
+    elif action == 'item_raw':
+        return _view_item(row_id, True)
+    # TODO: craft and uncraft views
+    # TODO: monster view
+
     typ = 'item'
     if action == 'monster':
         typ = 'monster'
