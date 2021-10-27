@@ -1,13 +1,62 @@
 import json
+import logging
 from collections import defaultdict
-from typing import Optional, List
+from typing import List
 
 from telebot import TeleBot
 from telebot.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from catabot import utils
 from catabot.commands.search import NUMBERS_EMOJI
-from download_data import ALL_DATA_FILE
+from download_data import ALL_DATA_FILE, DATA_VERSION_FILE
+
+
+raw_data = {
+    'version': None,
+    'item': {},
+    'uncraft': {},
+    'recipe': {},
+}
+
+
+def _update_data():
+    version = open(DATA_VERSION_FILE, 'r').read()
+    if raw_data['version'] != version:
+        # typs = set()
+        for row in json.load(open(ALL_DATA_FILE, 'r'))['data']:
+            typ = _mapped_type(row['type'])
+            if typ == 'item':
+                if 'id' in row:
+                    row_id = row['id']
+                elif 'abstract' in row:
+                    row_id = row['abstract']
+                else:
+                    logging.warning('no id and no abstract: {}', row)
+                    continue
+                raw_data['item'][row_id] = row
+            elif typ == 'recipe':
+                if 'result' in row and 'category' in row and row['category'] != 'CC_BUILDING':
+                    raw_data['recipe'][row['result']] = row
+            elif typ == 'uncraft':
+                if 'result' in row:
+                    raw_data['uncraft'][row['result']] = row
+            # else:
+            #     typs.add(typ)
+        # print(typs)
+        for row in raw_data['item'].values():
+            if 'copy-from' in row:
+                _add_copy_from(row)
+        raw_data['version'] = version
+
+
+def _add_copy_from(row: dict):
+    if 'copy-from' in row:
+        fr = raw_data['item'][row['copy-from']]
+        row.pop('copy-from')
+        for key in fr:
+            if key not in row and key != 'abstract':
+                row[key] = fr[key]
+        _add_copy_from(row)
 
 
 def _name(row: dict) -> str:
@@ -51,26 +100,13 @@ def _mapped_type(typ: str) -> str:
         return typ.lower()
 
 
-def _all_data() -> list:
-    return json.load(open(ALL_DATA_FILE, 'r'))['data']
-
-
 def _search_results(keyword: str) -> dict:
     results_by_type = defaultdict(list)
-    for row in _all_data():
-        if 'type' in row and _match_row(row, keyword):
-            results_by_type[_mapped_type(row['type'])].append(row)
+    for typ in {'item', }:
+        for row in raw_data[typ].values():
+            if 'id' in row and _match_row(row, keyword):
+                results_by_type[typ].append(row)
     return results_by_type
-
-
-def _result_by_id(typ: str, row_id: str) -> Optional[dict]:
-    result = None
-    for row in _all_data():
-        if 'id' in row and row['id'] == row_id and 'type' in row and _mapped_type(row['type']) == typ:
-            result = row
-            break
-    # TODO: implement recursive copy-from
-    return result
 
 
 def _page_view(results: list, keyword: str, action: str, page: int = 1) -> (str, InlineKeyboardMarkup):
@@ -103,14 +139,33 @@ def _action_view(action: str, row_id: str) -> (str, InlineKeyboardMarkup):
     typ = 'item'
     if action == 'monster':
         typ = 'monster'
+    elif action == 'craft':
+        typ = 'recipe'
+    elif action == 'uncraft':
+        typ = 'uncraft'
 
+    markup = InlineKeyboardMarkup()
     if action == 'view':
-        data = _result_by_id(typ, row_id)
-        return f"<code>{str(data)}</code>", InlineKeyboardMarkup()
+        if row_id in raw_data['recipe']:
+            markup.add(InlineKeyboardButton("🛠 Craft", callback_data=f"cdda:craft:{row_id}"))
+        if row_id in raw_data['uncraft']:
+            markup.add(InlineKeyboardButton("🛠 Deconstruct", callback_data=f"cdda:uncraft:{row_id}"))
+    elif action == 'craft':
+        markup.add(InlineKeyboardButton("👀 Description", callback_data=f"cdda:view:{row_id}"))
+        if row_id in raw_data['uncraft']:
+            markup.add(InlineKeyboardButton("🛠 Deconstruct", callback_data=f"cdda:uncraft:{row_id}"))
+    elif action == 'uncraft':
+        markup.add(InlineKeyboardButton("👀 Description", callback_data=f"cdda:view:{row_id}"))
+        if row_id in raw_data['recipe']:
+            markup.add(InlineKeyboardButton("🛠 Craft", callback_data=f"cdda:craft:{row_id}"))
+
+    data = raw_data[typ][row_id]
+    return f"<code>{str(data)}</code>", markup
 
 
 def search2(bot: TeleBot, message: Message):
     bot.send_chat_action(message.chat.id, 'typing')
+    _update_data()
     keyword = utils.get_keyword(message)
     command = utils.get_command(message).lower()
     if not keyword:
@@ -123,7 +178,7 @@ def search2(bot: TeleBot, message: Message):
     if command in {'/c', '/craft'}:
         action = 'craft'
     elif command in {'/disassemble', '/d', '/disasm'}:
-        action = 'disassemble'
+        action = 'uncraft'
     elif command in {'/m', '/mob', '/monster'}:
         action = 'monster'
         typ = 'monster'
@@ -144,8 +199,8 @@ def search2(bot: TeleBot, message: Message):
 
 
 def btn_pressed(bot: TeleBot, message: Message, data: str):
-    bot.send_chat_action(message.chat.id, 'typing')
     if data.startswith('cdda:'):
+        bot.send_chat_action(message.chat.id, 'typing')
         utils.delete_message(bot, message)
         action, row_id = data[5::].split(':')
         text, markup = _action_view(action, row_id)
