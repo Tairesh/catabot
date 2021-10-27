@@ -217,21 +217,31 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
         # TODO: if data['type'] in {'ARMOR', 'TOOL_ARMOR'}
         # TODO: if data['type'] in {'TOOL', 'TOOL_ARMOR'}
         # TODO: if data['type'] == 'ENGINE'
-        # TODO: if data['type'] == 'COMESTIBLE'
+        if data['type'] == 'COMESTIBLE':
+            text += "\nComestible:\n"
+            text += f"Calories: {data['calories'] if 'calories' in data else 0} kcal\n"
+            text += f"Quench: {data['quench'] if 'quench' in data else 0}\n"
+            text += f"Enjoyability: {data['fun'] if 'fun' in data else 0}\n"
+            text += f"Portions: {data['charges'] if 'charges' in data else 1}\n"
+            text += f"Spoils In: {data['spoils_in'] if 'spoils_in' in data else 'never'}\n"
+            text += f"Health: {data['healthy'] if 'healthy' in data else 0}\n"
+            text += f"Vitamins: {str(data['vitamins']) if 'vitamins' in data else 'None'}\n"
+
         # TODO: if data['type'] == 'WHEEL'
         # TODO: if 'seed_data' in data
 
         if 'bashing' in data or 'cutting' in data or data['type'] in {"GUN", "AMMO"}:
-            text += f"Bash: {data['bashing'] if 'bashing' in data else 0} | "
+            text += "\nMelee:\n"
+            text += f"Bash: {data['bashing'] if 'bashing' in data else 0}\n"
             if 'SPEAR' in data['flags'] or 'STAB' in data['flags']:
                 text += "Pierce: "
             else:
                 text += "Cut: "
             text += str(data['cutting'] if 'cutting' in data else 0)
-            text += f" | To Hit: {_compute_to_hit(data['to_hit']) if 'to_hit' in data else 0}"
-            text += f" | Moves Per Attack: {_mpa(data)}"
+            text += f"\nTo Hit: {_compute_to_hit(data['to_hit']) if 'to_hit' in data else 0}"
+            text += f"\nMoves Per Attack: {_mpa(data)}\n"
             if 'techniques' in data:
-                text += f" | Techniques: {str(data['techniques'])}"
+                text += f"Techniques: {str(data['techniques'])}\n"
 
         # TODO: pockets
 
