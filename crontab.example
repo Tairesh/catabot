@@ -1,0 +1,2 @@
+0 * * * * cd /path/to/catabot && venv/bin/python -m changelog
+1 * * * * cd /path/to/catabot && venv/bin/python -m download_data
