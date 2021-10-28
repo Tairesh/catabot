@@ -31,12 +31,14 @@ raw_data = {
     'material': {},
     'monster': {},
     'ammunition_type': {},
+    'requirement': {},
 }
 
 
 def _update_data():
     version = open(DATA_VERSION_FILE, 'r').read()
     if raw_data['version'] != version:
+        typs = set()
         for row in json.load(open(ALL_DATA_FILE, 'r'))['data']:
             typ = _mapped_type(row['type'])
             if typ == 'item':
@@ -49,11 +51,17 @@ def _update_data():
                     continue
                 raw_data['item'][row_id] = row
             elif typ == 'recipe':
-                if 'result' in row and 'category' in row and row['category'] != 'CC_BUILDING':
-                    raw_data['recipe'][row['result']] = row
-            elif typ == 'uncraft':
-                if 'result' in row:
-                    raw_data['uncraft'][row['result']] = row
+                if 'result' in row and 'category' in row and row['category'] != 'CC_BUILDING' and \
+                        ('on_display' not in row or row['on_display']):
+                    if row['result'] in raw_data['recipe']:
+                        raw_data['recipe'][row['result']].append(row)
+                    else:
+                        raw_data['recipe'][row['result']] = [row, ]
+            elif typ == 'uncraft' and 'result' in row:
+                if row['result'] in raw_data['uncraft']:
+                    raw_data['uncraft'][row['result']].append(row)
+                else:
+                    raw_data['uncraft'][row['result']] = [row, ]
             elif typ == 'material':
                 if 'id' in row:
                     row_id = row['id']
@@ -74,6 +82,11 @@ def _update_data():
                 raw_data['monster'][row_id] = row
             elif typ == 'ammunition_type':
                 raw_data['ammunition_type'][row['id']] = row
+            elif typ == 'requirement':
+                raw_data['requirement'][row['id']] = row
+            else:
+                typs.add(typ)
+        # print(typs)
         for typ in {'item', 'material', 'monster'}:
             for row in raw_data[typ].values():
                 if 'copy-from' in row:
@@ -84,7 +97,10 @@ def _update_data():
                     row['weight'] = 0
         for row in raw_data['recipe'].values():
             if 'reversible' in row and row['reversible']:
-                raw_data['uncraft'][row['result']] = row
+                if row['result'] in raw_data['uncraft']:
+                    raw_data['uncraft'][row['result']].append(row)
+                else:
+                    raw_data['uncraft'][row['result']] = [row, ]
         raw_data['version'] = version
 
 
@@ -471,12 +487,188 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
     return text, markup
 
 
+def _craft_item(row_id, raw=False) -> (str, InlineKeyboardMarkup):
+    datas = raw_data['recipe'][row_id]
+    if raw:
+        text = f"<code>{json.dumps(datas, indent=2)}</code>"
+        if len(text) > 4096:
+            text = f"<code>{str(datas)}</code>"[:4096]
+    else:
+        text = f"Craft recipe{'s' if len(datas) > 1 else ''} for " \
+               f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{row_id}\">{_name(raw_data['item'][row_id])}</a>\n\n"
+        for data in datas:
+            text += f"Primary skill: {data['skill_used'] if 'skill_used' in data else 'None'} " \
+                    f"({data['difficulty'] if 'difficulty' in data else 0})\n"
+            skills_required = []
+            if 'skills_required' in data and any(data['skills_required']):
+                if isinstance(data['skills_required'][0], list):
+                    skills_required = data['skills_required']
+                else:
+                    skills_required = [data['skills_required']]
+            skills_required = [f"{s} ({n})" for s, n in skills_required]
+            if any(skills_required):
+                text += f"Other skills: {' and '.join(skills_required)}\n"
+
+            # TODO: proficiencies
+            if 'proficiencies' in data:
+                text += f"Proficiencies: {str(data['proficiencies'])}\n"
+            text += f"Time to Complete: {data['time'] if 'time' in data else '0 m'}\n"
+            # TODO: activity levels
+            text += f"Activity Level: {data['activity_level'] if 'activity_level' in data else 'MODERATE_EXERCISE'}\n"
+            text += "Batch Time Saving: "
+            if 'batch_time_factors' in data:
+                text += f"{data['batch_time_factors'][0]}% at >{data['batch_time_factors'][1]} " \
+                        f"unit{'s' if data['batch_time_factors'][1] > 1 else ''}\n"
+            else:
+                text += "None\n"
+            if 'charges' in data:
+                # TODO: need to check result type
+                text += f"Recipe Makes: {data['charges']}\n"
+            if 'delete_flags' in data:
+                text += f"Delete Flags: {', '.join(data['delete_flags'])}\n"
+            if 'flags' in data:
+                text += f"Flags: {', '.join(data['flags'])}\n"
+
+            tools, qualities, components = _normalize_tools(data)
+
+            if any(tools) or any(qualities):
+                text += "Tools Required:\n"
+                if any(qualities):
+                    for q in qualities:
+                        amount = q['amount'] if 'amount' in q else 1
+                        # TODO: quality name
+                        text += f"- {str(amount) + ' ' if amount > 1 else ''}tool{'s' if amount > 1 else ''} " \
+                                f"with {q['id']} of {q['level']} or more\n"
+                if any(tools):
+                    for tool in tools:
+                        tool_names = []
+                        for tool_id, charges in tool:
+                            tool_names.append(f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{tool_id}\">"
+                                              f"{_name(raw_data['item'][tool_id])}</a>"
+                                              + (f" ({charges})" if charges > 0 else ''))
+                        text += f"- {' OR '.join(tool_names)}\n"
+            if any(components):
+                text += "Components:\n"
+                for components_row in components:
+                    components_names = []
+                    for item_id, count in components_row:
+                        if item_id in raw_data['item']:
+                            components_names.append(f"{count} "
+                                                    f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{item_id}\">"
+                                                    f"{_name(raw_data['item'][item_id])}</a>")
+                    text += f"- {' OR '.join(components_names)}\n"
+
+            if 'byproducts' in data:
+                text += "Byproducts:\n"
+                for b in data['byproducts']:
+                    text += f"- {b[1] if len(b) > 1 else 1} <a href=\"https://nornagon.github.io/cdda-guide/#/item/{b[0]}\">" \
+                            f"{_name(raw_data['item'][b[0]])}</a>\n"
+
+            text += "Autolearn: "
+            if 'autolearn' in data:
+                if not data['autolearn']:
+                    text += "No\n"
+                else:
+                    skills = []
+                    if isinstance(data['autolearn'], list):
+                        for skill, level in data['autolearn']:
+                            skills.append((skill, level))
+                    else:
+                        if 'skill_used' in data:
+                            skills.append((data['skill_used'], data['difficulty'] if 'difficulty' in data else 0))
+                        if 'skills_required' in data:
+                            for skill, level in data['skills_required']:
+                                skills.append((skill, level))
+                    if any(skills):
+                        text += ', '.join(f"{skill} ({level})" for skill, level in skills) + '\n'
+                    else:
+                        text += "At Birth\n"
+            else:
+                text += "No\n"
+
+            if 'book_learn' in data:
+                books = []
+                for book_id, level in data['book_learn']:
+                    books.append(f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{book_id}\">"
+                                 f"{_name(raw_data['item'][book_id])}</a> (at level {level})")
+                text += f"Written In: {', '.join(books)}\n"
+
+            text += '\n'
+
+    markup = InlineKeyboardMarkup()
+    buttons = [
+        InlineKeyboardButton("🛠 Craft", callback_data=f"cdda:craft:{row_id}")
+        if raw else
+        InlineKeyboardButton('🔣 Raw JSON', callback_data=f"cdda:craft_raw:{row_id}"),
+        InlineKeyboardButton("👀 Description", callback_data=f"cdda:view:{row_id}"),
+    ]
+    if row_id in raw_data['uncraft']:
+        buttons.append(InlineKeyboardButton("🛠 Deconstruct", callback_data=f"cdda:uncraft:{row_id}"))
+    markup.add(*buttons)
+    return text, markup
+
+
+def _normalize_tools(data: dict) -> (list, list, list):
+    tools = data['tools'] if 'tools' in data else []
+    qualities = data['qualities'] if 'qualities' in data else []
+    components = data['components'] if 'components' in data else []
+    for components_row in components:
+        for component in components_row:
+            if len(component) == 3 and component[2] == 'LIST':
+                req_id, count, _ = component
+                components_row.remove(component)
+                req = raw_data['requirement'][req_id]
+                _, _, c = _normalize_tools(req)
+                for r in c[0]:
+                    if len(r) == 2:
+                        r[1] *= count
+                        components_row.append(r)
+                    else:
+                        req_id, count2, _ = r
+                        req = raw_data['requirement'][req_id]
+                        _, _, c = _normalize_tools(req)
+                        for r in c[0]:
+                            if len(r) == 2:
+                                r[1] *= count * count2
+                                components_row.append(r)
+                            else:
+                                logging.warning("third level of this shit! {} / {}", data, r)
+    for tool_row in tools:  # TODO: idk why but fake tools (like basecamp ones) doesnt appear here
+        for tool in tool_row:
+            if len(tool) == 3 and tool[2] == 'LIST':
+                req_id, count, _ = tool
+                tool_row.remove(tool)
+                req = raw_data['requirement'][req_id]
+                t, _, _ = _normalize_tools(req)
+                tool_row += map(lambda r: [r[0], r[1] * count], t[0])
+    if 'using' in data:
+        for req_id, count in data['using']:
+            req = raw_data['requirement'][req_id]
+            t, q, c = _normalize_tools(req)
+            qualities += q
+            for tr in t:
+                for r in tr:
+                    r[1] *= count
+            tools += t
+            for cr in c:
+                for r in cr:
+                    r[1] *= count
+            components += c
+    # TODO: sum
+
+    return tools, qualities, components
+
+
 def _action_view(action: str, row_id: str) -> (str, InlineKeyboardMarkup):
     if action == 'view':
         return _view_item(row_id)
     elif action == 'item_raw':
         return _view_item(row_id, True)
-    # TODO: craft and uncraft views
+    elif action == 'craft':
+        return _craft_item(row_id)
+    elif action == 'craft_raw':
+        return _craft_item(row_id, True)
+    # TODO: uncraft view
     # TODO: monster view
 
     typ = 'item'
