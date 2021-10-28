@@ -95,12 +95,13 @@ def _update_data():
                     row['volume'] = 0
                 if 'weight' not in row:
                     row['weight'] = 0
-        for row in raw_data['recipe'].values():
-            if 'reversible' in row and row['reversible']:
-                if row['result'] in raw_data['uncraft']:
-                    raw_data['uncraft'][row['result']].append(row)
-                else:
-                    raw_data['uncraft'][row['result']] = [row, ]
+        for rows_row in raw_data['recipe'].values():
+            for row in rows_row:
+                if 'reversible' in row and row['reversible']:
+                    if row['result'] in raw_data['uncraft']:
+                        raw_data['uncraft'][row['result']].append(row)
+                    else:
+                        raw_data['uncraft'][row['result']] = [row, ]
         raw_data['version'] = version
 
 
@@ -488,29 +489,31 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
     if row_id in raw_data['recipe']:
         buttons.append(InlineKeyboardButton("🛠 Craft", callback_data=f"cdda:craft:{row_id}"))
     if row_id in raw_data['uncraft']:
-        buttons.append(InlineKeyboardButton("🛠 Deconstruct", callback_data=f"cdda:uncraft:{row_id}"))
+        buttons.append(InlineKeyboardButton("🛠 Disassemble", callback_data=f"cdda:uncraft:{row_id}"))
     markup.add(*buttons)
     return text, markup
 
 
-def _craft_item(row_id, raw=False) -> (str, InlineKeyboardMarkup):
-    if row_id not in raw_data['recipe']:
+def _craft_item(row_id, raw=False, typ='recipe') -> (str, InlineKeyboardMarkup):
+    if row_id not in raw_data[typ]:
         text = f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{row_id}\">{_name(raw_data['item'][row_id])}</a> " \
-               f"can't be crafted!"
+               f"can't be {'crafted' if typ == 'recipe' else 'disassembled'}!"
         markup = InlineKeyboardMarkup()
         buttons = [InlineKeyboardButton("👀 Description", callback_data=f"cdda:view:{row_id}")]
-        if row_id in raw_data['uncraft']:
-            buttons.append(InlineKeyboardButton("🛠 Deconstruct", callback_data=f"cdda:uncraft:{row_id}"))
+        if typ == 'recipe' and row_id in raw_data['uncraft']:
+            buttons.append(InlineKeyboardButton("🛠 Disassemble", callback_data=f"cdda:uncraft:{row_id}"))
+        if typ == 'uncraft' and row_id in raw_data['recipe']:
+            buttons.append(InlineKeyboardButton("🛠 Craft", callback_data=f"cdda:craft:{row_id}"))
         markup.add(*buttons)
         return text, markup
 
-    datas = raw_data['recipe'][row_id]
+    datas = raw_data[typ][row_id]
     if raw:
         text = f"<code>{json.dumps(datas, indent=2)}</code>"
         if len(text) > 4096:
             text = f"<code>{str(datas)}</code>"[:4096]
     else:
-        text = f"Craft recipe{'s' if len(datas) > 1 else ''} for " \
+        text = f"{'Craft' if typ == 'recipe' else 'Uncraft'} recipe{'s' if len(datas) > 1 else ''} for " \
                f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{row_id}\">{_name(raw_data['item'][row_id])}</a>\n\n"
         for data in datas:
             text += f"Primary skill: {data['skill_used'] if 'skill_used' in data else 'None'} " \
@@ -531,17 +534,18 @@ def _craft_item(row_id, raw=False) -> (str, InlineKeyboardMarkup):
             text += f"Time to Complete: {data['time'] if 'time' in data else '0 m'}\n"
             # TODO: activity levels
             text += f"Activity Level: {data['activity_level'] if 'activity_level' in data else 'MODERATE_EXERCISE'}\n"
-            text += "Batch Time Saving: "
-            if 'batch_time_factors' in data:
-                text += f"{data['batch_time_factors'][0]}% at >{data['batch_time_factors'][1]} " \
-                        f"unit{'s' if data['batch_time_factors'][1] > 1 else ''}\n"
-            else:
-                text += "None\n"
-            if 'charges' in data:
-                # TODO: need to check result type
-                text += f"Recipe Makes: {data['charges']}\n"
-            if 'delete_flags' in data:
-                text += f"Delete Flags: {', '.join(data['delete_flags'])}\n"
+            if typ == 'recipe':
+                text += "Batch Time Saving: "
+                if 'batch_time_factors' in data:
+                    text += f"{data['batch_time_factors'][0]}% at >{data['batch_time_factors'][1]} " \
+                            f"unit{'s' if data['batch_time_factors'][1] > 1 else ''}\n"
+                else:
+                    text += "None\n"
+                if 'charges' in data:
+                    # TODO: need to check result type
+                    text += f"Recipe Makes: {data['charges']}\n"
+                if 'delete_flags' in data:
+                    text += f"Delete Flags: {', '.join(data['delete_flags'])}\n"
             if 'flags' in data:
                 text += f"Flags: {', '.join(data['flags'])}\n"
 
@@ -574,56 +578,65 @@ def _craft_item(row_id, raw=False) -> (str, InlineKeyboardMarkup):
                                                     f"{_name(raw_data['item'][item_id])}</a>")
                     text += f"- {' OR '.join(components_names)}\n"
 
-            if 'byproducts' in data:
-                text += "Byproducts:\n"
-                for b in data['byproducts']:
-                    text += f"- {b[1] if len(b) > 1 else 1} <a href=\"https://nornagon.github.io/cdda-guide/#/item/{b[0]}\">" \
-                            f"{_name(raw_data['item'][b[0]])}</a>\n"
+            if typ == 'recipe':
+                if 'byproducts' in data:
+                    text += "Byproducts:\n"
+                    for b in data['byproducts']:
+                        text += f"- {b[1] if len(b) > 1 else 1} " \
+                                f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{b[0]}\">" \
+                                f"{_name(raw_data['item'][b[0]])}</a>\n"
 
-            text += "Autolearn: "
-            if 'autolearn' in data:
-                if not data['autolearn']:
-                    text += "No\n"
-                else:
-                    skills = []
-                    if isinstance(data['autolearn'], list):
-                        for skill, level in data['autolearn']:
-                            skills.append((skill, level))
+                text += "Autolearn: "
+                if 'autolearn' in data:
+                    if not data['autolearn']:
+                        text += "No\n"
                     else:
-                        if 'skill_used' in data:
-                            skills.append((data['skill_used'], data['difficulty'] if 'difficulty' in data else 0))
-                        if 'skills_required' in data:
-                            for skill, level in data['skills_required']:
+                        skills = []
+                        if isinstance(data['autolearn'], list):
+                            for skill, level in data['autolearn']:
                                 skills.append((skill, level))
-                    if any(skills):
-                        text += ', '.join(f"{skill} ({level})" for skill, level in skills) + '\n'
-                    else:
-                        text += "At Birth\n"
-            else:
-                text += "No\n"
-
-            if 'book_learn' in data:
-                books = []
-                if isinstance(data['book_learn'], list):
-                    books = data['book_learn']
+                        else:
+                            if 'skill_used' in data:
+                                skills.append((data['skill_used'], data['difficulty'] if 'difficulty' in data else 0))
+                            if 'skills_required' in data:
+                                for skill, level in data['skills_required']:
+                                    skills.append((skill, level))
+                        if any(skills):
+                            text += ', '.join(f"{skill} ({level})" for skill, level in skills) + '\n'
+                        else:
+                            text += "At Birth\n"
                 else:
-                    for book_id, book_data in data['book_learn'].items():
-                        books.append((book_id, book_data['skill_level']))
-                books = map(lambda r: f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{r[0]}\">"
-                                      f"{_name(raw_data['item'][r[0]])}</a> (at level {r[1]})", books)
-                text += f"Written In: {', '.join(books)}\n"
+                    text += "No\n"
+
+                if 'book_learn' in data:
+                    books = []
+                    if isinstance(data['book_learn'], list):
+                        books = data['book_learn']
+                    else:
+                        for book_id, book_data in data['book_learn'].items():
+                            books.append((book_id, book_data['skill_level']))
+                    books = map(lambda r: f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{r[0]}\">"
+                                          f"{_name(raw_data['item'][r[0]])}</a> (at level {r[1]})", books)
+                    text += f"Written In: {', '.join(books)}\n"
 
             text += '\n'
 
     markup = InlineKeyboardMarkup()
-    buttons = [
-        InlineKeyboardButton("🛠 Craft", callback_data=f"cdda:craft:{row_id}")
-        if raw else
-        InlineKeyboardButton('🔣 Raw JSON', callback_data=f"cdda:craft_raw:{row_id}"),
+    buttons = [(
+            InlineKeyboardButton("🛠 Craft", callback_data=f"cdda:craft:{row_id}")
+            if raw else
+            InlineKeyboardButton('🔣 Raw JSON', callback_data=f"cdda:craft_raw:{row_id}")
+        ) if typ == 'recipe' else (
+            InlineKeyboardButton("🛠 Disassemble", callback_data=f"cdda:uncraft:{row_id}")
+            if raw else
+            InlineKeyboardButton('🔣 Raw JSON', callback_data=f"cdda:uncraft_raw:{row_id}")
+        ),
         InlineKeyboardButton("👀 Description", callback_data=f"cdda:view:{row_id}"),
     ]
-    if row_id in raw_data['uncraft']:
-        buttons.append(InlineKeyboardButton("🛠 Deconstruct", callback_data=f"cdda:uncraft:{row_id}"))
+    if typ == 'recipe' and row_id in raw_data['uncraft']:
+        buttons.append(InlineKeyboardButton("🛠 Disassemble", callback_data=f"cdda:uncraft:{row_id}"))
+    if typ == 'uncraft' and row_id in raw_data['recipe']:
+        buttons.append(InlineKeyboardButton("🛠 Craft", callback_data=f"cdda:craft:{row_id}"))
     markup.add(*buttons)
     return text, markup
 
@@ -688,6 +701,10 @@ def _action_view(action: str, row_id: str) -> (str, InlineKeyboardMarkup):
         return _craft_item(row_id)
     elif action == 'craft_raw':
         return _craft_item(row_id, True)
+    elif action == 'uncraft':
+        return _craft_item(row_id, typ='uncraft')
+    elif action == 'uncraft_raw':
+        return _craft_item(row_id, True, typ='uncraft')
     # TODO: uncraft view
     # TODO: monster view
 
@@ -705,11 +722,11 @@ def _action_view(action: str, row_id: str) -> (str, InlineKeyboardMarkup):
         if row_id in raw_data['recipe']:
             buttons.append(InlineKeyboardButton("🛠 Craft", callback_data=f"cdda:craft:{row_id}"))
         if row_id in raw_data['uncraft']:
-            buttons.append(InlineKeyboardButton("🛠 Deconstruct", callback_data=f"cdda:uncraft:{row_id}"))
+            buttons.append(InlineKeyboardButton("🛠 Disassemble", callback_data=f"cdda:uncraft:{row_id}"))
     elif action == 'craft':
         buttons.append(InlineKeyboardButton("👀 Description", callback_data=f"cdda:view:{row_id}"))
         if row_id in raw_data['uncraft']:
-            buttons.append(InlineKeyboardButton("🛠 Deconstruct", callback_data=f"cdda:uncraft:{row_id}"))
+            buttons.append(InlineKeyboardButton("🛠 Disassemble", callback_data=f"cdda:uncraft:{row_id}"))
     elif action == 'uncraft':
         buttons.append(InlineKeyboardButton("👀 Description", callback_data=f"cdda:view:{row_id}"))
         if row_id in raw_data['recipe']:
