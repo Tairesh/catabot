@@ -604,9 +604,13 @@ def _craft_item(row_id, raw=False) -> (str, InlineKeyboardMarkup):
 
             if 'book_learn' in data:
                 books = []
-                for book_id, level in data['book_learn']:
-                    books.append(f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{book_id}\">"
-                                 f"{_name(raw_data['item'][book_id])}</a> (at level {level})")
+                if isinstance(data['book_learn'], list):
+                    books = data['book_learn']
+                else:
+                    for book_id, book_data in data['book_learn'].items():
+                        books.append((book_id, book_data['skill_level']))
+                books = map(lambda r: f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{r[0]}\">"
+                                      f"{_name(raw_data['item'][r[0]])}</a> (at level {r[1]})", books)
                 text += f"Written In: {', '.join(books)}\n"
 
             text += '\n'
