@@ -176,8 +176,7 @@ def _page_view(results: list, keyword: str, action: str, page: int = 1) -> (str,
             text=NUMBERS_EMOJI[i + 1],
             callback_data=f"cdda:{action}:{row['id']}"
         ))
-        text += f"{NUMBERS_EMOJI[i + 1]} <a href=\"https://nornagon.github.io/cdda-guide/#/item/{row['id']}\">" \
-                f"{utils.escape(_name(row))}</a>"
+        text += f"{NUMBERS_EMOJI[i + 1]} {_link_name(row['id'])}"
         if action == 'craft' and row['id'] not in raw_data['recipe']:
             text += " (can't be crafted)"
         if action == 'uncraft' and row['id'] not in raw_data['uncraft']:
@@ -267,13 +266,18 @@ def _part_name(part: str) -> str:
     return part
 
 
+def _link_name(row_id: str) -> str:
+    data = raw_data['item'][row_id]
+    return f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{row_id}\">{utils.escape(_name(data))}</a>"
+
+
 def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
     # this is basically a poor copy of https://github.com/nornagon/cdda-guide/blob/main/src/types/Item.svelte
     data = raw_data['item'][row_id]
     if raw:
         text = f"<code>{json.dumps(data, indent=2)}</code>"
     else:
-        text = f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{row_id}\">{utils.escape(_name(data))}</a>\n" \
+        text = f"{_link_name(row_id)}\n" \
                f"<i>{data['description']}</i>\n\n" \
                f"Materials: {', '.join(data['material']) if 'material' in data else 'None'}\n" \
                f"Volume: {data['volume']}\n" \
@@ -282,7 +286,6 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
                f"Flags: {', '.join(data['flags']) if 'flags' in data and len(data['flags']) > 0 else 'None'}\n"
         # TODO: flags' descriptions
         # TODO: ammo
-        # TODO: magazine_compatible
         # TODO: faults
         if 'qualities' in data:
             # TODO: qualities' names
@@ -378,7 +381,19 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
                     text += f"Fire: {fire:.2}\n"
                 text += f"Environmental: {env}\n"
 
-        # TODO: if data['type'] in {'TOOL', 'TOOL_ARMOR'}
+        if data['type'] in {'TOOL', 'TOOL_ARMOR'} and (
+            'charges_per_use' in data or 'power_draw' in data or 'turns_per_charge' in data or 'sub' in data
+        ):
+            text += "\nTool:\n"
+            if 'charges_per_use' in data:
+                text += f"Charges Per Use: {data['charges_per_use']}\n"
+            if 'power_draw' in data:
+                text += f"Power Draw: {data['power_draw'] / 1000:.1} W\n"
+            if 'turns_per_charge' in data:
+                text += f"Turns Per Charge: {data['turns_per_charge']}\n"
+            if 'sub' in data:
+                text += f"Substitute: {_link_name(data['sub'])}\n"
+
         # TODO: if data['type'] == 'ENGINE'
         if data['type'] == 'COMESTIBLE':
             text += "\nComestible:\n"
@@ -496,7 +511,7 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
 
 def _craft_item(row_id, raw=False, typ='recipe') -> (str, InlineKeyboardMarkup):
     if row_id not in raw_data[typ]:
-        text = f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{row_id}\">{_name(raw_data['item'][row_id])}</a> " \
+        text = f"{_link_name(row_id)} " \
                f"can't be {'crafted' if typ == 'recipe' else 'disassembled'}!"
         markup = InlineKeyboardMarkup()
         buttons = [InlineKeyboardButton("👀 Description", callback_data=f"cdda:view:{row_id}")]
@@ -514,7 +529,7 @@ def _craft_item(row_id, raw=False, typ='recipe') -> (str, InlineKeyboardMarkup):
             text = f"<code>{str(datas)}</code>"[:4096]
     else:
         text = f"{'Craft' if typ == 'recipe' else 'Uncraft'} recipe{'s' if len(datas) > 1 else ''} for " \
-               f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{row_id}\">{_name(raw_data['item'][row_id])}</a>\n\n"
+               f"{_link_name(row_id)}\n\n"
         for data in datas:
             text += f"Primary skill: {data['skill_used'] if 'skill_used' in data else 'None'} " \
                     f"({data['difficulty'] if 'difficulty' in data else 0})\n"
@@ -563,9 +578,7 @@ def _craft_item(row_id, raw=False, typ='recipe') -> (str, InlineKeyboardMarkup):
                     for tool in tools:
                         tool_names = []
                         for tool_id, charges in tool:
-                            tool_names.append(f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{tool_id}\">"
-                                              f"{_name(raw_data['item'][tool_id])}</a>"
-                                              + (f" ({charges})" if charges > 0 else ''))
+                            tool_names.append(f"{_link_name(tool_id)}" + (f" ({charges})" if charges > 0 else ''))
                         text += f"- {' OR '.join(tool_names)}\n"
             if any(components):
                 text += "Components:\n"
@@ -573,18 +586,14 @@ def _craft_item(row_id, raw=False, typ='recipe') -> (str, InlineKeyboardMarkup):
                     components_names = []
                     for item_id, count in components_row:
                         if item_id in raw_data['item']:
-                            components_names.append(f"{count} "
-                                                    f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{item_id}\">"
-                                                    f"{_name(raw_data['item'][item_id])}</a>")
+                            components_names.append(f"{count} {_link_name(item_id)}")
                     text += f"- {' OR '.join(components_names)}\n"
 
             if typ == 'recipe':
                 if 'byproducts' in data:
                     text += "Byproducts:\n"
                     for b in data['byproducts']:
-                        text += f"- {b[1] if len(b) > 1 else 1} " \
-                                f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{b[0]}\">" \
-                                f"{_name(raw_data['item'][b[0]])}</a>\n"
+                        text += f"- {b[1] if len(b) > 1 else 1} {_link_name(b[0])}\n"
 
                 text += "Autolearn: "
                 if 'autolearn' in data:
@@ -615,8 +624,7 @@ def _craft_item(row_id, raw=False, typ='recipe') -> (str, InlineKeyboardMarkup):
                     else:
                         for book_id, book_data in data['book_learn'].items():
                             books.append((book_id, book_data['skill_level']))
-                    books = map(lambda r: f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{r[0]}\">"
-                                          f"{_name(raw_data['item'][r[0]])}</a> (at level {r[1]})", books)
+                    books = map(lambda r: f"{_link_name(r[0])} (at level {r[1]})", books)
                     text += f"Written In: {', '.join(books)}\n"
 
             text += '\n'
