@@ -33,6 +33,7 @@ raw_data = {
     'ammunition_type': {},
     'requirement': {},
     'tool_quality': {},
+    'proficiency': {},
 }
 
 
@@ -88,6 +89,8 @@ def _update_data():
                 raw_data['requirement'][row['id']] = row
             elif typ == 'tool_quality':
                 raw_data['tool_quality'][row['id']] = row
+            elif typ == 'proficiency':
+                raw_data['proficiency'][row['id']] = row
             else:
                 typs.add(typ)
         # print(typs)
@@ -548,7 +551,15 @@ def _craft_item(row_id, raw=False, typ='recipe') -> (str, InlineKeyboardMarkup):
 
             # TODO: proficiencies
             if 'proficiencies' in data:
-                text += f"Proficiencies: {str(data['proficiencies'])}\n"
+                proficiencies = map(lambda p: f"{_name(raw_data['proficiency'][p['proficiency']])}" + (
+                    (f" (Time Multiplier x{p['time_multiplier']})"
+                     if 'time_multiplier' in p and p['time_multiplier'] != 1 else '') +
+                    (f" (Fail Multiplier x{p['fail_multiplier']})"
+                     if 'fail_multiplier' in p and p['fail_multiplier'] != 1 else '') +
+                    (f" (Learning Time Multiplier x{p['learning_time_multiplier']})"
+                     if 'learning_time_multiplier' in p and p['learning_time_multiplier'] != 1 else '')
+                ), data['proficiencies'])
+                text += f"Proficiencies: {', '.join(proficiencies)}\n"
             text += f"Time to Complete: {data['time'] if 'time' in data else '0 m'}\n"
             # TODO: activity levels
             text += f"Activity Level: {data['activity_level'] if 'activity_level' in data else 'MODERATE_EXERCISE'}\n"
@@ -688,15 +699,21 @@ def _normalize_tools(data: dict) -> (list, list, list):
         for req_id, count in data['using']:
             req = raw_data['requirement'][req_id]
             t, q, c = _normalize_tools(req)
-            qualities += q
+            for qq in q:
+                if qq not in qualities:
+                    qualities.append(qq)
             for tr in t:
                 for r in tr:
                     r[1] *= count
-            tools += t
+            for tt in t:
+                if tt not in tools:
+                    tools.append(tt)
             for cr in c:
                 for r in cr:
                     r[1] *= count
-            components += c
+            for cc in c:
+                if cc not in components:
+                    components.append(cc)
     # TODO: sum
 
     return tools, qualities, components
