@@ -30,13 +30,13 @@ raw_data = {
     'recipe': {},
     'material': {},
     'monster': {},
+    'ammunition_type': {},
 }
 
 
 def _update_data():
     version = open(DATA_VERSION_FILE, 'r').read()
     if raw_data['version'] != version:
-        # typs = set()
         for row in json.load(open(ALL_DATA_FILE, 'r'))['data']:
             typ = _mapped_type(row['type'])
             if typ == 'item':
@@ -72,13 +72,16 @@ def _update_data():
                     logging.warning('no id and no abstract: {}', row)
                     continue
                 raw_data['monster'][row_id] = row
-            # else:
-            #     typs.add(typ)
-        # print(typs)
+            elif typ == 'ammunition_type':
+                raw_data['ammunition_type'][row['id']] = row
         for typ in {'item', 'material', 'monster'}:
             for row in raw_data[typ].values():
                 if 'copy-from' in row:
                     _add_copy_from(typ, row)
+                if 'volume' not in row:
+                    row['volume'] = 0
+                if 'weight' not in row:
+                    row['weight'] = 0
         for row in raw_data['recipe'].values():
             if 'reversible' in row and row['reversible']:
                 raw_data['uncraft'][row['result']] = row
@@ -232,6 +235,15 @@ def _covers(row: dict, body_part: str) -> bool:
     return False
 
 
+def _part_name(part: str) -> str:
+    part = part.capitalize()
+    if part.endswith('_l'):
+        part = "Left " + part[:-2]
+    elif part.endswith('_r'):
+        part = "Right " + part[:-2]
+    return part
+
+
 def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
     # this is basically a poor copy of https://github.com/nornagon/cdda-guide/blob/main/src/types/Item.svelte
     data = raw_data['item'][row_id]
@@ -300,7 +312,7 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
             if 'armor' in data:
                 text += "Encumbrance:\n"
                 for apd in data['armor']:
-                    text += f"<b>{', '.join(apd['covers'])}:</b> "
+                    text += f"{', '.join(map(_part_name, apd['covers']))}: "
                     text += str(apd['encumbrance']) if isinstance(apd['encumbrance'], int) else \
                         f"{apd['encumbrance'][0]} ({apd['encumbrance'][1]} when full)"
                     text += "\n"
@@ -314,7 +326,7 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
             if 'armor' in data:
                 text += '\n'
                 for apd in data['armor']:
-                    text += f"<b>{', '.join(apd['covers'])}:</b> "
+                    text += f"{', '.join(map(_part_name, apd['covers']))}: "
                     text += f"{apd['coverage'] if 'coverage' in apd else 0}%\n"
             else:
                 text += f"{data['coverage'] if 'coverage' in data else 0}\n"
@@ -361,7 +373,7 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
         if 'bashing' in data or 'cutting' in data or data['type'] in {"GUN", "AMMO"}:
             text += "\nMelee:\n"
             text += f"Bash: {data['bashing'] if 'bashing' in data else 0}\n"
-            if 'SPEAR' in data['flags'] or 'STAB' in data['flags']:
+            if 'flags' in data and ('SPEAR' in data['flags'] or 'STAB' in data['flags']):
                 text += "Pierce: "
             else:
                 text += "Cut: "
@@ -372,30 +384,78 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
                 text += f"Techniques: {str(data['techniques'])}\n"
 
         if 'pocket_data' in data and any(data['pocket_data']):
-            text += "Pockets:\n"
+            text += "\nPockets:\n" if len(data['pocket_data']) > 1 else '\n'
             for pocket in data['pocket_data']:
-                if 'pocket_type' in pocket and pocket['pocket_type'] == 'CONTAINER':
-                    text += pocket['max_contains_volume'] if 'max_contains_volume' in pocket else 'unlimited'
-                    text += ' / '
-                    text += pocket['max_contains_weight'] if 'max_contains_weight' in pocket else 'unlimited'
+                pocket_type = pocket['pocket_type'] if 'pocket_type' in pocket else 'CONTAINER'
+                if pocket_type in {'MAGAZINE', 'MAGAZINE_WELL'}:
+                    text += "<b>Magazine:</b>\n"
+                elif pocket_type == 'SOFTWARE':
+                    text += "<b>Software</b>\n"
+                elif pocket_type == 'EBOOK':
+                    text += "<b>E-Book</b>\n"
                 else:
-                    text += "non-container"
+                    text += "<b>Container:</b>\n"
+                pocket_data = []
+                if pocket_type == 'CONTAINER':
+                    if 'max_contains_weight' in pocket and 'max_contains_volume' in pocket:
+                        pocket_data.append(f"Max: {pocket['max_contains_volume']} / {pocket['max_contains_weight']}")
+                    elif 'max_contains_volume' in pocket:
+                        pocket_data.append(f"Max: {pocket['max_contains_volume']}")
+                    elif 'max_contains_weight' in pocket:
+                        pocket_data.append(f"Max: {pocket['max_contains_weight']}")
+                    if 'max_item_length' in pocket:
+                        if any(pocket_data):
+                            pocket_data[0] += ' / ' + pocket['max_item_length']
+                        else:
+                            pocket_data.append(f"Max: {pocket['max_item_length']}")
+
+                    if 'min_item_volume' in pocket:
+                        pocket_data.append(f"Min Volume: {pocket['min_item_volume']}")
+
+                    if 'sealed_data' in pocket and 'spoil_multiplier' in pocket['sealed_data'] \
+                            and pocket['sealed_data']['spoil_multiplier'] != 1:
+                        pocket_data.append(f"Spoil Multiplier: {pocket['sealed_data']['spoil_multiplier']}")
+
+                    specials = []
+                    if 'fire_protection' in pocket and pocket['fire_protection']:
+                        specials.append("Fire Protection")
+                    if 'watertight' in pocket and pocket['watertight']:
+                        specials.append("Watertight")
+                    if 'airtight' in pocket and pocket['airtight']:
+                        specials.append("Airtight")
+                    if 'open_container' in pocket and pocket['open_container']:
+                        specials.append("Open Container")
+                    if 'rigid' in pocket and pocket['rigid']:
+                        specials.append("Rigid")
+                    if 'holster' in pocket and pocket['holster']:
+                        specials.append("Holster")
+                    if any(specials):
+                        pocket_data.append(f"Specials: {', '.join(specials)}")
+
+                if 'moves' in pocket or pocket_type == 'CONTAINER':
+                    pocket_data.append(f"Moves To Remove Item: {pocket['moves'] if 'moves' in pocket else 100}")
 
                 if 'ammo_restriction' in pocket:
-                    text += f" / ammo restrict: {str(pocket['ammo_restriction'])}"
-                if 'max_item_length' in pocket:
-                    text += ' / ' + pocket['max_item_length']
-                if 'min_item_volume' in pocket:
-                    text += ' / min ' + pocket['min_item_volume']
-                text += f" / moves: {pocket['moves'] if 'moves' in pocket else 100}"
-                if 'sealed_data' in pocket and 'spoil_multiplier' in pocket['sealed_data'] \
-                        and pocket['sealed_data']['spoil_multiplier'] != 1:
-                    text += f" / spoil multiplier: {pocket['sealed_data']['spoil_multiplier']}"
+                    ammos = []
+                    for ammo_id, max_charges in pocket['ammo_restriction'].items():
+                        ammos.append(f"{max_charges} {'round' if data['type'] == 'GUN' else 'charge'}"
+                                     f"{'s' if max_charges > 1 else ''} of {raw_data['ammunition_type'][ammo_id]['name']}")
+                    pocket_data.append(f"Supported Ammo Types: {' / '.join(ammos)}")
                 if 'flag_restriction' in pocket:
-                    text += f" / flag restrict: {str(pocket['flag_restriction'])}"
+                    items = []
+                    for item in raw_data['item'].values():
+                        if 'flags' in item:
+                            for flag in pocket['flag_restriction']:
+                                if flag in item['flags']:
+                                    items.append(_name(item))
+                                    break
+                    pocket_data.append(f"Supported Magazines: {' / '.join(items)}")
                 if 'item_restriction' in pocket:
-                    text += f" / item restrict: {str(pocket['item_restriction'])}"
-                text += '\n'
+                    items = []
+                    for item_id in pocket['item_restriction']:
+                        items.append(_name(raw_data['item'][item_id]))
+                    pocket_data.append(f"Supported Magazines: {' / '.join(items)}")
+                text += '\n'.join(pocket_data) + '\n'
 
     markup = InlineKeyboardMarkup()
     buttons = [
