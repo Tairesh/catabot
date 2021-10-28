@@ -123,7 +123,7 @@ def _names(row: dict) -> List[str]:
 
 
 def _match_row(row: dict, keyword: str) -> bool:
-    return any(keyword in n for n in _names(row))
+    return any(keyword.lower() in n.lower() for n in _names(row))
 
 
 def _mapped_type(typ: str) -> str:
