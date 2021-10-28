@@ -175,7 +175,13 @@ def _page_view(results: list, keyword: str, action: str, page: int = 1) -> (str,
             text=NUMBERS_EMOJI[i + 1],
             callback_data=f"cdda:{action}:{row['id']}"
         ))
-        text += f"{NUMBERS_EMOJI[i + 1]} {utils.escape(_name(row))} (<code>{row['id']}</code>)\n"
+        text += f"{NUMBERS_EMOJI[i + 1]} <a href=\"https://nornagon.github.io/cdda-guide/#/item/{row['id']}\">" \
+                f"{utils.escape(_name(row))}</a>"
+        if action == 'craft' and row['id'] not in raw_data['recipe']:
+            text += " (can't be crafted)"
+        if action == 'uncraft' and row['id'] not in raw_data['uncraft']:
+            text += " (can't be disassembled)"
+        text += '\n'
     text += f"\n(page {page} of {maxpage+1})"
     markup = InlineKeyboardMarkup(row_width=5)
     markup.add(*btns)
@@ -488,6 +494,16 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
 
 
 def _craft_item(row_id, raw=False) -> (str, InlineKeyboardMarkup):
+    if row_id not in raw_data['recipe']:
+        text = f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{row_id}\">{_name(raw_data['item'][row_id])}</a> " \
+               f"can't be crafted!"
+        markup = InlineKeyboardMarkup()
+        buttons = [InlineKeyboardButton("👀 Description", callback_data=f"cdda:view:{row_id}")]
+        if row_id in raw_data['uncraft']:
+            buttons.append(InlineKeyboardButton("🛠 Deconstruct", callback_data=f"cdda:uncraft:{row_id}"))
+        markup.add(*buttons)
+        return text, markup
+
     datas = raw_data['recipe'][row_id]
     if raw:
         text = f"<code>{json.dumps(datas, indent=2)}</code>"
