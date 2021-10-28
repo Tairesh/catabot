@@ -32,6 +32,7 @@ raw_data = {
     'monster': {},
     'ammunition_type': {},
     'requirement': {},
+    'tool_quality': {},
 }
 
 
@@ -51,13 +52,14 @@ def _update_data():
                     continue
                 raw_data['item'][row_id] = row
             elif typ == 'recipe':
+                # TODO: there are some abstract craft recipes
                 if 'result' in row and 'category' in row and row['category'] != 'CC_BUILDING' and \
                         ('on_display' not in row or row['on_display']):
                     if row['result'] in raw_data['recipe']:
                         raw_data['recipe'][row['result']].append(row)
                     else:
                         raw_data['recipe'][row['result']] = [row, ]
-            elif typ == 'uncraft' and 'result' in row:
+            elif typ == 'uncraft' and 'result' in row:  # TODO: there are some abstract uncraft recipes
                 if row['result'] in raw_data['uncraft']:
                     raw_data['uncraft'][row['result']].append(row)
                 else:
@@ -84,6 +86,8 @@ def _update_data():
                 raw_data['ammunition_type'][row['id']] = row
             elif typ == 'requirement':
                 raw_data['requirement'][row['id']] = row
+            elif typ == 'tool_quality':
+                raw_data['tool_quality'][row['id']] = row
             else:
                 typs.add(typ)
         # print(typs)
@@ -285,11 +289,10 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
                f"Length: {_item_length(data)}\n" \
                f"Flags: {', '.join(data['flags']) if 'flags' in data and len(data['flags']) > 0 else 'None'}\n"
         # TODO: flags' descriptions
-        # TODO: ammo
-        # TODO: faults
+        # TODO: possible faults
         if 'qualities' in data:
-            # TODO: qualities' names
-            text += f"Qualities: {str(data['qualities'])}\n"
+            qualities = map(lambda q: f"{_name(raw_data['tool_quality'][q[0]])} ({q[1]})", data['qualities'])
+            text += f"Qualities: {', '.join(qualities)}\n"
         # TODO: vehicle parts
         # TODO: ascii_picture
 
@@ -418,7 +421,7 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
             text += str(data['cutting'] if 'cutting' in data else 0)
             text += f"\nTo Hit: {_compute_to_hit(data['to_hit']) if 'to_hit' in data else 0}"
             text += f"\nMoves Per Attack: {_mpa(data)}\n"
-            if 'techniques' in data:
+            if 'techniques' in data:  # TODO: techniques names
                 text += f"Techniques: {str(data['techniques'])}\n"
 
         if 'pocket_data' in data and any(data['pocket_data']):
@@ -571,9 +574,8 @@ def _craft_item(row_id, raw=False, typ='recipe') -> (str, InlineKeyboardMarkup):
                 if any(qualities):
                     for q in qualities:
                         amount = q['amount'] if 'amount' in q else 1
-                        # TODO: quality name
                         text += f"- {str(amount) + ' ' if amount > 1 else ''}tool{'s' if amount > 1 else ''} " \
-                                f"with {q['id']} of {q['level']} or more\n"
+                                f"with {_name(raw_data['tool_quality'][q['id']])} of {q['level']} or more\n"
                 if any(tools):
                     for tool in tools:
                         tool_names = []
