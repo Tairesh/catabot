@@ -40,6 +40,11 @@ raw_data = {
 def _update_data():
     version = open(DATA_VERSION_FILE, 'r').read()
     if raw_data['version'] != version:
+        for key in raw_data:
+            if key == "version":
+                raw_data["version"] = version
+            else:
+                raw_data[key].clear()
         typs = set()
         for row in json.load(open(ALL_DATA_FILE, 'r'))['data']:
             typ = _mapped_type(row['type'])
@@ -109,7 +114,6 @@ def _update_data():
                         raw_data['uncraft'][row['result']].append(row)
                     else:
                         raw_data['uncraft'][row['result']] = [row, ]
-        raw_data['version'] = version
 
 
 def _add_copy_from(typ: str, row: dict):
