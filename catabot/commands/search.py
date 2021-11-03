@@ -166,7 +166,7 @@ def _mapped_type(typ: str) -> str:
 def _search_results(typ, keyword: str) -> list:
     results = []
     for row in raw_data[typ].values():
-        if 'id' in row and _match_row(row, keyword):
+        if 'id' in row and _match_row(row, keyword) and row['id'] in raw_data[typ]:
             results.append(row)
     return results
 
@@ -549,7 +549,6 @@ def _craft_item(row_id, raw=False, typ='recipe') -> (str, InlineKeyboardMarkup):
             if any(skills_required):
                 text += f"Other skills: {' and '.join(skills_required)}\n"
 
-            # TODO: proficiencies
             if 'proficiencies' in data:
                 proficiencies = map(lambda p: f"{_name(raw_data['proficiency'][p['proficiency']])}" + (
                     (f" (Time Multiplier x{p['time_multiplier']})"
