@@ -178,6 +178,7 @@ def _search_results(typ, keyword: str) -> list:
 def _page_view(results: list, keyword: str, action: str, page: int = 1) -> (str, InlineKeyboardMarkup):
     maxpage = int(len(results) / 10)
     results = results[(page - 1) * 10: page * 10:]
+    typ = 'monster' if action == 'monster' else 'item'
 
     text = f"Search results for {action} {keyword}:\n\n"
     btns = []
@@ -187,7 +188,7 @@ def _page_view(results: list, keyword: str, action: str, page: int = 1) -> (str,
             text=NUMBERS_EMOJI[i + 1],
             callback_data=f"cdda:{action}:{row['id']}"
         ))
-        text += f"{NUMBERS_EMOJI[i + 1]} {_link_name(row['id'])}"
+        text += f"{NUMBERS_EMOJI[i + 1]} {_link_name(typ, row['id'])}"
         if action == 'craft' and row['id'] not in raw_data['recipe']:
             text += " (can't be crafted)"
         if action == 'uncraft' and row['id'] not in raw_data['uncraft']:
@@ -277,9 +278,9 @@ def _part_name(part: str) -> str:
     return part
 
 
-def _link_name(row_id: str) -> str:
-    data = raw_data['item'][row_id]
-    return f"<a href=\"https://nornagon.github.io/cdda-guide/#/item/{row_id}\">{utils.escape(_name(data))}</a>"
+def _link_name(typ: str, row_id: str) -> str:
+    data = raw_data[typ][row_id]
+    return f"<a href=\"https://nornagon.github.io/cdda-guide/#/{typ}/{row_id}\">{utils.escape(_name(data))}</a>"
 
 
 def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
@@ -288,7 +289,7 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
     if raw:
         text = f"<code>{json.dumps(data, indent=2)}</code>"
     else:
-        text = f"{_link_name(row_id)}\n" \
+        text = f"{_link_name('item', row_id)}\n" \
                f"<i>{data['description']}</i>\n\n" \
                f"Materials: {', '.join(data['material']) if 'material' in data else 'None'}\n" \
                f"Volume: {data['volume']}\n" \
@@ -402,7 +403,7 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
             if 'turns_per_charge' in data:
                 text += f"Turns Per Charge: {data['turns_per_charge']}\n"
             if 'sub' in data:
-                text += f"Substitute: {_link_name(data['sub'])}\n"
+                text += f"Substitute: {_link_name('item', data['sub'])}\n"
 
         # TODO: if data['type'] == 'ENGINE'
         if data['type'] == 'COMESTIBLE':
@@ -521,7 +522,7 @@ def _view_item(row_id: str, raw=False) -> (str, InlineKeyboardMarkup):
 
 def _craft_item(row_id, raw=False, typ='recipe') -> (str, InlineKeyboardMarkup):
     if row_id not in raw_data[typ]:
-        text = f"{_link_name(row_id)} " \
+        text = f"{_link_name('item', row_id)} " \
                f"can't be {'crafted' if typ == 'recipe' else 'disassembled'}!"
         markup = InlineKeyboardMarkup()
         buttons = [InlineKeyboardButton("👀 Description", callback_data=f"cdda:view:{row_id}")]
@@ -539,7 +540,7 @@ def _craft_item(row_id, raw=False, typ='recipe') -> (str, InlineKeyboardMarkup):
             text = f"<code>{str(datas)}</code>"[:4096]
     else:
         text = f"{'Craft' if typ == 'recipe' else 'Uncraft'} recipe{'s' if len(datas) > 1 else ''} for " \
-               f"{_link_name(row_id)}\n\n"
+               f"{_link_name('item', row_id)}\n\n"
         for data in datas:
             text += f"Primary skill: {data['skill_used'] if 'skill_used' in data else 'None'} " \
                     f"({data['difficulty'] if 'difficulty' in data else 0})\n"
@@ -594,7 +595,7 @@ def _craft_item(row_id, raw=False, typ='recipe') -> (str, InlineKeyboardMarkup):
                     for tool in tools:
                         tool_names = []
                         for tool_id, charges in tool:
-                            tool_names.append(f"{_link_name(tool_id)}" + (f" ({charges})" if charges > 0 else ''))
+                            tool_names.append(f"{_link_name('item', tool_id)}" + (f" ({charges})" if charges > 0 else ''))
                         text += f"- {' OR '.join(tool_names)}\n"
             if any(components):
                 text += "Components:\n"
@@ -602,14 +603,14 @@ def _craft_item(row_id, raw=False, typ='recipe') -> (str, InlineKeyboardMarkup):
                     components_names = []
                     for item_id, count in components_row:
                         if item_id in raw_data['item']:
-                            components_names.append(f"{count} {_link_name(item_id)}")
+                            components_names.append(f"{count} {_link_name('item', item_id)}")
                     text += f"- {' OR '.join(components_names)}\n"
 
             if typ == 'recipe':
                 if 'byproducts' in data:
                     text += "Byproducts:\n"
                     for b in data['byproducts']:
-                        text += f"- {b[1] if len(b) > 1 else 1} {_link_name(b[0])}\n"
+                        text += f"- {b[1] if len(b) > 1 else 1} {_link_name('item', b[0])}\n"
 
                 text += "Autolearn: "
                 if 'autolearn' in data:
@@ -640,7 +641,7 @@ def _craft_item(row_id, raw=False, typ='recipe') -> (str, InlineKeyboardMarkup):
                     else:
                         for book_id, book_data in data['book_learn'].items():
                             books.append((book_id, book_data['skill_level']))
-                    books = map(lambda r: f"{_link_name(r[0])} (at level {r[1]})", books)
+                    books = map(lambda r: f"{_link_name('item', r[0])} (at level {r[1]})", books)
                     text += f"Written In: {', '.join(books)}\n"
 
             text += '\n'
