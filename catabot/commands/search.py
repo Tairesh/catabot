@@ -795,7 +795,11 @@ def search(bot: TeleBot, message: Message):
         bot.send_sticker(message.chat.id, 'CAADAgADxgADOtDfAeLvpRcG6I1bFgQ', message.message_id)
     elif len(results) == 1:
         text, markup = _action_view(action, results[0]['id'])
-        bot.reply_to(message, text, reply_markup=markup, parse_mode='HTML')
+        if len(text) > 4096:
+            bot.reply_to(message, text.split('\n\n')[0] + "\n\n<i>(text is too long for Telegram)</i>",
+                         reply_markup=markup, parse_mode='HTML')
+        else:
+            bot.reply_to(message, text, reply_markup=markup, parse_mode='HTML')
     else:
         text, markup = _page_view(results, keyword, action)
         bot.reply_to(message, text, reply_markup=markup, parse_mode='HTML')
@@ -810,7 +814,11 @@ def btn_pressed(bot: TeleBot, message: Message, data: str):
         utils.delete_message(bot, message)
         action, row_id = data[5::].split(':')
         text, markup = _action_view(action, row_id)
-        bot.reply_to(message.reply_to_message, text, reply_markup=markup, parse_mode='HTML')
+        if len(text) > 4096:
+            bot.reply_to(message.reply_to_message, text.split('\n\n')[0] + "\n\n<i>(full text is too long for Telegram)</i>",
+                         reply_markup=markup, parse_mode='HTML')
+        else:
+            bot.reply_to(message.reply_to_message, text, reply_markup=markup, parse_mode='HTML')
     elif data == 'cdda_cancel':
         bot.edit_message_text(message.text.split('\n')[0] + '\n(canceled)', message.chat.id, message.message_id)
     elif data.startswith('cdda_page'):
