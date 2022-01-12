@@ -9,6 +9,10 @@ from catabot.commands.release import get_release
 from catabot.commands.search import search, btn_pressed
 
 
+ALL_CONTENT_TYPES = ['animation', 'audio', 'contact', 'dice', 'document', 'location',
+                     'photo', 'poll', 'sticker', 'venue', 'video', 'video_note', 'voice']
+
+
 def threaded(fn):
     def wrapper(*args, **kwargs):
         thread = threading.Thread(target=fn, args=args, kwargs=kwargs)
@@ -47,7 +51,7 @@ class TelegramBot:
         def _get_release(message):
             get_release(self.bot, message)
 
-        @self.bot.message_handler(func=lambda m: m.from_user and m.from_user.id == 777000)
+        @self.bot.message_handler(func=lambda m: m.from_user and m.from_user.id == 777000, content_types=ALL_CONTENT_TYPES)
         def _unpin(message):
             try:
                 self.bot.unpin_chat_message(message.chat.id, message.message_id)
