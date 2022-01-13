@@ -1,5 +1,3 @@
-import threading
-
 from telebot import TeleBot
 from telebot.apihelper import ApiException
 from telebot.types import User, Message, CallbackQuery
