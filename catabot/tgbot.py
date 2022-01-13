@@ -9,7 +9,7 @@ from catabot.commands.release import get_release
 from catabot.commands.search import search, btn_pressed
 
 
-ALL_CONTENT_TYPES = ['animation', 'audio', 'contact', 'dice', 'document', 'location',
+ALL_CONTENT_TYPES = ['text', 'animation', 'audio', 'contact', 'dice', 'document', 'location',
                      'photo', 'poll', 'sticker', 'venue', 'video', 'video_note', 'voice']
 
 
