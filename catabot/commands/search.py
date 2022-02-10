@@ -624,9 +624,11 @@ def _craft_item(row_id, raw=False, typ='recipe') -> (str, InlineKeyboardMarkup):
                         else:
                             if 'skill_used' in data:
                                 skills.append((data['skill_used'], data['difficulty'] if 'difficulty' in data else 0))
-                            if 'skills_required' in data:
-                                for skill, level in data['skills_required'][:2]:
-                                    skills.append((skill, level))
+                            if 'skills_required' in data and any(data["skills_required"]):
+                                if isinstance(data["skills_required"][0], str):
+                                    skills.append(data["skills_required"])
+                                else:
+                                    skills += data['skills_required']
                         if any(skills):
                             text += ', '.join(f"{skill} ({level})" for skill, level in skills) + '\n'
                         else:
