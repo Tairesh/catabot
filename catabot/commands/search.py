@@ -817,7 +817,10 @@ def btn_pressed(bot: TeleBot, message: Message, data: str):
         action, row_id = data[5::].split(':')
         text, markup = _action_view(action, row_id)
         if len(text) > 4096:
-            bot.reply_to(message.reply_to_message, text.split('\n\n')[0] + "\n\n<i>(full text is too long for Telegram)</i>",
+            text = text.split('\n\n')[0]
+            if len(text) > 4096:
+                text = text[:4000] + "...\n\n<i>(text is too long for Telegram)</i>"
+            bot.reply_to(message.reply_to_message, text + "\n\n<i>(full text is too long for Telegram)</i>",
                          reply_markup=markup, parse_mode='HTML')
         else:
             bot.reply_to(message.reply_to_message, text, reply_markup=markup, parse_mode='HTML')
