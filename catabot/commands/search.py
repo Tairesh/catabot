@@ -536,8 +536,8 @@ def _craft_item(row_id, raw=False, typ='recipe') -> (str, InlineKeyboardMarkup):
     datas = raw_data[typ][row_id]
     if raw:
         text = f"<code>{json.dumps(datas, indent=2)}</code>"
-        if len(text) > 4096:
-            text = f"<code>{str(datas)}</code>"[:4096]
+        if len(text) > 4080:
+            text = "<code>" + str(datas)[:4080] + "</code>"
     else:
         text = f"{'Craft' if typ == 'recipe' else 'Uncraft'} recipe{'s' if len(datas) > 1 else ''} for " \
                f"{_link_name('item', row_id)}\n\n"
@@ -819,7 +819,7 @@ def btn_pressed(bot: TeleBot, message: Message, data: str):
         if len(text) > 4096:
             text = text.split('\n\n')[0]
             if len(text) > 4096:
-                text = text[:4000] + "...\n\n<i>(text is too long for Telegram)</i>"
+                text = text[:4000] + "...</code>\n\n<i>(text is too long for Telegram)</i>"
             bot.reply_to(message.reply_to_message, text + "\n\n<i>(full text is too long for Telegram)</i>",
                          reply_markup=markup, parse_mode='HTML')
         else:
