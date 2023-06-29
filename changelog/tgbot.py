@@ -46,13 +46,12 @@ def _message_to_bundles(message: str) -> List[str]:
 
 def get_bundles(release: Release) -> List[str]:
     bundles = []
-    message = f'<a href="{release.url}"><b>{release.name}</b></a> {release.created_at}\n'
+    message = f'<a href="{release.url}"><b>{release.name}</b></a> {release.created_at}\n\n'
 
-    if len(release.commit_messages):
-        for change in release.commit_messages:
-            message += f"{_prepare(change)}\n"
+    if release.description:
+        message += release.description
     else:
-        message += '\n<i>(no changes)</i>'
+        message += '<i>(no changes)</i>'
 
     bundles += _message_to_bundles(message)
     return bundles

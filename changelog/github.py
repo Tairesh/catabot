@@ -16,9 +16,7 @@ class Release:
     name: str
     url: str
     created_at: str
-    commit: str
-    prev_commit: Optional[str] = None
-    commit_messages: List[str] = None
+    description: str
 
 
 def get_releases() -> Iterator[Release]:
@@ -29,20 +27,8 @@ def get_releases() -> Iterator[Release]:
     for i, release in enumerate(releases):
         if release['id'] <= last_posted:
             break
-        result.append(Release(release['id'], release['name'], release['html_url'], release['created_at'],
-                              release['target_commitish'],
-                              releases[i+1]['target_commitish'] if i < (len(releases)-1) else None))
-
-    commits = json.loads(urllib.request.urlopen(COMMITS_API).read())
-    for release in result:
-        release.commit_messages = []
-        started = False
-        for commit in commits:
-            if commit['sha'] == release.commit:
-                started = True
-            if commit['sha'] == release.prev_commit:
-                break
-            if started:
-                release.commit_messages.append(commit['commit']['message'].split('\n')[0])
+        result.append(
+            Release(release['id'], release['name'], release['html_url'], release['created_at'], release['body'])
+        )
 
     return reversed(result)
