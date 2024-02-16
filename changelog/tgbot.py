@@ -56,7 +56,7 @@ def get_bundles(release: Release) -> List[str]:
     message = f'<a href="{release.url}"><b>{release.name}</b></a> {created_at}\n\n'
 
     if release.description:
-        message += release.description
+        message += html.escape(release.description)
     else:
         message += '<i>(no changes)</i>'
 
