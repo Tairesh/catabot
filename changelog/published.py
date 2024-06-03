@@ -11,7 +11,7 @@ def get() -> int:
     """
     if os.path.isfile(LAST_PUBLISHED_VERSION_FILE):
         with open(LAST_PUBLISHED_VERSION_FILE, 'r') as f:
-            return int(f.read())
+            return int(f.read().strip())
     else:
         return 0
 
