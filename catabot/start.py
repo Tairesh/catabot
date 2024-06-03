@@ -113,7 +113,7 @@ class CataBot:
             token_file = os.path.join('config', 'token.txt')
             if os.path.isfile(token_file):
                 with open(token_file, 'r') as file:
-                    return file.read()
+                    return file.read().strip()
             else:
                 exit(f"ERROR: No token file found at '{token_file}'")
         except KeyError as e:
