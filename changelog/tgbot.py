@@ -72,7 +72,7 @@ def send(release: Release):
     bundles = get_bundles(release)
 
     with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'token.txt')) as f:
-        token = f.read()
+        token = f.read().strip()
     bot = TeleBot(token)
 
     try:
