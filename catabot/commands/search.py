@@ -7,7 +7,7 @@ from telebot import TeleBot
 from telebot.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from catabot import utils
-from download_data import ALL_DATA_FILE, DATA_VERSION_FILE
+from download_data import ALL_DATA_FILE
 
 
 NUMBERS_EMOJI = {
@@ -38,7 +38,8 @@ raw_data = {
 
 
 def _update_data():
-    version = open(DATA_VERSION_FILE, 'r').read()
+    data_json = json.load(open(ALL_DATA_FILE, 'r'))
+    version = data_json['build_number']
     if raw_data['version'] != version:
         for key in raw_data:
             if key == "version":
@@ -46,7 +47,7 @@ def _update_data():
             else:
                 raw_data[key].clear()
         typs = set()
-        for row in json.load(open(ALL_DATA_FILE, 'r'))['data']:
+        for row in data_json['data']:
             typ = _mapped_type(row['type'])
             if typ == 'item':
                 if 'id' in row:

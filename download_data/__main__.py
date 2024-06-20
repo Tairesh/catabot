@@ -1,16 +1,7 @@
 import shutil
-from os import path
 from urllib import request
-from typing import Optional
 
-from . import DATA_VERSION_FILE, ALL_DATA_FILE, ALL_DATA_URL
-
-
-def current_data_version() -> Optional[str]:
-    if path.isfile(DATA_VERSION_FILE):
-        with open(DATA_VERSION_FILE, 'r') as f:
-            return f.read()
-    return None
+from . import ALL_DATA_FILE, ALL_DATA_URL
 
 
 def download_data():
