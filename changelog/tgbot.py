@@ -12,7 +12,8 @@ from changelog.github import Release
 
 ADMIN = 31445050
 CHANGELOG_CHANNEL = -1001332994456
-CHANGELOG_TOPIC = -1001150487023
+CHANGELOG_TOPIC_CHAT = -1001150487023
+CHANGELOG_TOPIC_MSG = 646348
 GITHUB_ISSUE_URL_TEMPLATE = "https://github.com/CleverRaven/Cataclysm-DDA/issues/{}"
 r_hashtag = re.compile(r'#([\d]+)')
 HARDCODED_STRINGS = {
@@ -78,8 +79,8 @@ def send(release: Release):
 
     try:
         for bundle in bundles:
-            message = bot.send_message(CHANGELOG_CHANNEL, bundle, parse_mode='HTML')
-            bot.forward_message(CHANGELOG_TOPIC, CHANGELOG_CHANNEL, message.message_id)
+            bot.send_message(CHANGELOG_CHANNEL, bundle, parse_mode='HTML')
+            bot.send_message(CHANGELOG_TOPIC_CHAT, bundle, parse_mode='HTML', reply_to_message_id=CHANGELOG_TOPIC_MSG)
         published.save(release.id)
     except Exception:
         bot.send_message(ADMIN, traceback.format_exc())
