@@ -1,2 +1,2 @@
-pyTelegramBotAPI~=4.23.0
+pyTelegramBotAPI~=4.25.0
 BeautifulSoup4~=4.12.3
