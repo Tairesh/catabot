@@ -14,16 +14,22 @@ CATABN_GIT_API = "https://api.github.com/repos/cataclysmbnteam/Cataclysm-BN/rele
 
 LINUX = 'linux'
 LINUX_NAMES = {'lin', 'linux'}
+LINUX_ASSET_NAMES = {'linux-with-graphics-and-sounds', 'linux-tiles-x64'}
 WINDOWS = 'windows'
-WINDOWS_NAMES = {'win', 'window', 'windows'}
+WINDOWS_NAMES = {'win', 'windows'}
+WINDOWS_ASSET_NAMES = {'windows-with-graphics-and-sounds-x64', 'windows-tiles-x64-msvc'}
 WINDOWS32 = 'windows x32'
 WINDOWS32_NAMES = {'windows32', 'win32', 'windows 32', 'win 32'}
+WINDOWS32_ASSET_NAMES = {'windows-with-graphics-and-sounds-x32', 'windows-tiles-x32-msvc'}
 OSX = 'osx'
 OSX_NAMES = {'osx', 'os x', 'apple', 'macos'}
+OSX_ASSET_NAMES = {'osx-with-graphics-universal'}
 ANDROID = 'android'
 ANDROID_NAMES = {'android', 'phone', 'android64', 'android 64', 'android 64bit', 'android 64 bit'}
+ANDROID_ASSET_NAMES = {'android-x64'}
 ANDROID32 = 'android x32'
 ANDROID32_NAMES = {'android32', 'android 32', 'android 32bit', 'android 32 bit'}
+ANDROID32_ASSET_NAMES = {'android-x32'}
 ALL_PLATFORM_NAMES = LINUX_NAMES | WINDOWS_NAMES | WINDOWS32_NAMES | OSX_NAMES | ANDROID_NAMES | ANDROID32_NAMES
 
 
@@ -97,12 +103,12 @@ def get_release(bot: TeleBot, message: Message):
         }
 
         asset_names_by_platform = {
-            LINUX: {'linux-tiles-x64', 'lin64-tiles', 'Linux_x64-Tiles'},
-            OSX: {'osx-tiles-x64', 'osx64-tiles', 'OSX-Tiles'},
-            WINDOWS: {'windows-tiles-x64', 'win64-tiles', 'Windows_x64-Tiles'},
-            WINDOWS32: {'windows-tiles-x32', 'win32-tiles', 'Windows-Tiles'},
-            ANDROID: {'android-x64', 'arm64-v8a', 'Android_arm64'},
-            ANDROID32: {'android-x32', 'armeabi-v7a', 'Android_arm32'},
+            LINUX: LINUX_ASSET_NAMES,
+            OSX: OSX_ASSET_NAMES,
+            WINDOWS: WINDOWS_ASSET_NAMES,
+            WINDOWS32: WINDOWS32_ASSET_NAMES,
+            ANDROID: ANDROID_ASSET_NAMES,
+            ANDROID32: ANDROID32_ASSET_NAMES,
         }
 
         for platform in asset_names_by_platform:
