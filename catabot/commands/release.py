@@ -44,7 +44,7 @@ class Mode(Enum):
 
 def get_release(bot: TeleBot, message: Message):
     bot.send_chat_action(message.chat.id, 'typing')
-    keyword = utils.get_keyword(message).lower().strip()
+    keyword = utils.get_keyword(message, False).lower().strip()
 
     mode = Mode.LAST
     fork = None
