@@ -1,9 +1,10 @@
-# Cataclysm DDA Telegram Bot and Changelog Announcer
+# Cataclysm DDA Telegram Bot, Changelog Announcer, and Data Downloader
 
-This repository contains two main components:
+This repository contains three main components:
 
-*   **CataBot:** A Telegram bot that provides information about the game Cataclysm: Dark Days Ahead (CDDA). Users can search for items, crafting recipes, monster information, and more.
+*   **CataBot:** A Telegram bot that provides information about the game Cataclysm: Dark Days Ahead (CDDA). It uses pre-processed game data to allow users to search for items, crafting recipes, monster information, and more.
 *   **Changelog Announcer:** A tool that monitors the Cataclysm: DDA GitHub repository for new releases and automatically announces them to a specified Telegram chat.
+*   **Download Data:** A module responsible for downloading and processing all Cataclysm DDA game definitions (items, recipes, monsters, etc.) into a structured JSON format. This data is then utilized by `CataBot` for its search functionalities.
 
 ## CataBot
 
@@ -16,20 +17,29 @@ CataBot is a Telegram bot designed to provide helpful information for players of
 
 ### Setup
 
-1.  **Clone the repository:**
+1.  **Download game data:**
+    *   `CataBot` relies on game data (items, recipes, monsters, etc.) that is processed by the `download_data` module. Ensure you have run this module at least once to generate the necessary data files.
+    *   See the `## Download Data` section for instructions on how to run it (`python -m download_data`).
+2.  **Clone the repository:**
     ```bash
-    git clone <repository_url>
-    cd <repository_directory>
+    git clone git@github.com:Tairesh/catabot.git
+    cd catabot 
     ```
-2.  **Install dependencies:**
+3.  **Create and activate a virtual environment:**
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate
+    ```
+    *Note: On Windows, the activation command is `venv\Scripts\activate`.*
+4.  **Install dependencies (within the activated venv):**
     ```bash
     pip install -r requirements.txt
     ```
-3.  **Configure the bot token:**
+5.  **Configure the bot token:**
     *   Navigate to the `config/` directory.
     *   Create a file named `token.txt` (you can copy `config/samples/token.txt` as a template).
     *   Paste your Telegram bot token into this file. You can obtain a token by talking to the [BotFather](https://t.me/botfather) on Telegram.
-4.  **Run the bot:**
+6.  **Run the bot (from the repository root, with venv active):**
     ```bash
     python -m catabot
     ```
@@ -65,6 +75,28 @@ The Changelog Announcer is a script that monitors the official Cataclysm: DDA Gi
     ```
     This will typically check for new releases once and then exit. For continuous monitoring, you'll need to schedule it using a tool like `cron` (see Deployment section).
 
+## Download Data
+
+The `download_data` module is a crucial component responsible for fetching and processing game data from the Cataclysm: DDA repositories. It gathers all items, recipes, monster information, and other game definitions, then compiles them into a structured JSON file.
+
+This JSON data is then used by `CataBot` to provide its search results. Therefore, you must run this module at least once before `CataBot` can function fully.
+
+### Usage
+
+To download/update the game data:
+
+1.  **Ensure dependencies are installed:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+2.  **Run the script:**
+    ```bash
+    python -m download_data
+    ```
+    This will download the latest game data and create/update the necessary JSON file(s) in a designated location (e.g., a `data/` directory or similar, which `CataBot` will then access).
+
+It's recommended to re-run this script periodically to keep the game data used by `CataBot` up-to-date with the latest version of Cataclysm: DDA.
+
 ## Deployment
 
 ### Dependencies
@@ -75,23 +107,30 @@ All Python dependencies required for both `catabot` and the `changelog` announce
 pip install -r requirements.txt
 ```
 
-### Scheduling Changelog Announcements (Cron)
+### Scheduling Regular Tasks (Cron)
 
-To automatically check for new releases and announce them, you can set up a cron job to run the `changelog` script periodically.
+To automatically update game data and check for new releases, you can set up cron jobs to run the `download_data` and `changelog` scripts periodically within the project's virtual environment.
 
-1.  **Open your crontab for editing:**
+1.  **Ensure your virtual environment is set up** as described in the `CataBot` setup section (e.g., in a directory named `venv` within your project root).
+
+2.  **Open your crontab for editing:**
     ```bash
     crontab -e
     ```
-2.  **Add a new line to schedule the script.** For example, to run the script every hour:
-    ```cron
-    0 * * * * /usr/bin/python3 /path/to/your/repo/changelog/__main__.py
-    ```
-    *   **Important:** Replace `/usr/bin/python3` with the actual path to your Python 3 interpreter if it's different.
-    *   **Important:** Replace `/path/to/your/repo/` with the absolute path to the directory where you cloned this repository.
-    *   You can use the `crontab.example` file in this repository as a reference. It might contain a more specific example tailored to this project.
 
-3.  **Save and exit the crontab editor.**
+3.  **Add new lines to schedule the scripts.** For example, to run both scripts every hour:
+    ```cron
+    0 * * * * /path/to/your/repo/venv/bin/python /path/to/your/repo/download_data/__main__.py
+    0 * * * * /path/to/your/repo/venv/bin/python /path/to/your/repo/changelog/__main__.py
+    ```
+    *   **Important:**
+        *   Replace `/path/to/your/repo/` with the absolute path to the directory where you cloned this repository (e.g., `/home/user/catabot/`).
+        *   The paths `/path/to/your/repo/venv/bin/python` assume your virtual environment is named `venv` and is located directly within your project's root directory. Adjust if your setup differs.
+        *   The `crontab.example` file in this repository might contain further project-specific examples or considerations.
+
+4.  **Save and exit the crontab editor.**
+
+This setup will ensure that `download_data` fetches the latest game definitions and `changelog` checks for new game releases once every hour.
 
 ### Running CataBot as a Systemd Service
 
