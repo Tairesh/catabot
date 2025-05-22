@@ -67,7 +67,7 @@ The Changelog Announcer is a script that monitors the official Cataclysm: DDA Gi
 ### Setup
 
 1.  **Prerequisites:** Ensure `catabot` is set up and you have its Telegram token and the target chat ID for announcements.
-2.  **Configuration:** The script likely requires configuration for the GitHub repository to monitor (e.g., `CleverRaven/Cataclysm-DDA`) and Telegram details (bot token, chat ID). This configuration is usually done within the script or a separate configuration file. *(Developer note: Check `changelog/github.py` and `changelog/tgbot.py` for specific configuration details and update this section if necessary.)*
+2.  **Configuration:** The script requires configuration for the GitHub repository to monitor (e.g., `CleverRaven/Cataclysm-DDA`) and Telegram details (bot token, chat ID). This configuration is usually done within the script (e.g., `changelog/github.py`, `changelog/tgbot.py`) or a separate configuration file. <!-- TODO: Verify and replace this with specific confirmed details -->
 3.  **Dependencies:** Make sure all dependencies are installed (refer to `requirements.txt`).
 4.  **Running the announcer:**
     ```bash
