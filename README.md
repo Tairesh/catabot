@@ -145,7 +145,7 @@ To ensure `catabot` runs continuously in the background and restarts automatical
         *   `Description`: A description of the service.
         *   `ExecStart`: This is the most important line. It should specify the command to start the bot, typically `python -m catabot`. **Ensure the path to your Python interpreter and the path to the `catabot` module are correct.** For example:
             ```
-            ExecStart=/usr/bin/python3 -m catabot /path/to/your/repo/catabot
+            ExecStart=/path/to/your/repo/venv/bin/python -m catabot
             ```
             (Adjust `/usr/bin/python3` and `/path/to/your/repo/` as needed.)
         *   `WorkingDirectory`: Set this to the root directory of the cloned repository.
