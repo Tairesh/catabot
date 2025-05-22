@@ -37,7 +37,7 @@ CataBot is a Telegram bot designed to provide helpful information for players of
     ```
 5.  **Configure the bot token:**
     *   Navigate to the `config/` directory.
-    *   Create a file named `token.txt` (you can copy `config/samples/token.txt` as a template).
+    *   Copy `config/samples/token.txt` to `config/token.txt` and edit `config/token.txt` to include your Telegram bot token.
     *   Paste your Telegram bot token into this file. You can obtain a token by talking to the [BotFather](https://t.me/botfather) on Telegram.
 6.  **Run the bot (from the repository root, with venv active):**
     ```bash
@@ -67,13 +67,16 @@ The Changelog Announcer is a script that monitors the official Cataclysm: DDA Gi
 ### Setup
 
 1.  **Prerequisites:** Ensure `catabot` is set up and you have its Telegram token and the target chat ID for announcements.
-2.  **Configuration:** The script likely requires configuration for the GitHub repository to monitor (e.g., `CleverRaven/Cataclysm-DDA`) and Telegram details (bot token, chat ID). This configuration is usually done within the script or a separate configuration file. *(Developer note: Check `changelog/github.py` and `changelog/tgbot.py` for specific configuration details and update this section if necessary.)*
+2.  **Configuration:**
+    *   **Telegram Bot Token:** This script requires a Telegram bot token. If using the same bot instance as `CataBot`, it uses `config/token.txt`. For a different bot, modify `changelog/tgbot.py` to load the token according to your setup (e.g., from a specific file path or an environment variable).
+    *   **Telegram Chat ID:** Edit the `changelog/tgbot.py` script and set the value of the `CHAT_ID` variable to your desired Telegram Chat ID.
+    *   **GitHub Repository:** The script monitors the `CleverRaven/Cataclysm-DDA` repository by default. The repository URL is defined in `changelog/github.py` (e.g., in a variable like `GITHUB_REPO_URL` or `API_URL`) and can be modified there to track a different repository.
 3.  **Dependencies:** Make sure all dependencies are installed (refer to `requirements.txt`).
 4.  **Running the announcer:**
     ```bash
     python -m changelog
     ```
-    This will typically check for new releases once and then exit. For continuous monitoring, you'll need to schedule it using a tool like `cron` (see Deployment section).
+    This will check for new releases once and then exit. For continuous monitoring, you'll need to schedule it using a tool like `cron` (see Deployment section).
 
 ## Download Data
 
@@ -93,7 +96,7 @@ To download/update the game data:
     ```bash
     python -m download_data
     ```
-    This will download the latest game data and create/update the necessary JSON file(s) in a designated location (e.g., a `data/` directory or similar, which `CataBot` will then access).
+    This will download the latest game data and create/update the necessary JSON file(s) (e.g., in a `data/` directory, or as specified in the script's output/documentation) which `CataBot` will then access.
 
 It's recommended to re-run this script periodically to keep the game data used by `CataBot` up-to-date with the latest version of Cataclysm: DDA.
 
@@ -120,13 +123,14 @@ To automatically update game data and check for new releases, you can set up cro
 
 3.  **Add new lines to schedule the scripts.** For example, to run both scripts every hour:
     ```cron
-    0 * * * * /path/to/your/repo/venv/bin/python /path/to/your/repo/download_data/__main__.py
-    0 * * * * /path/to/your/repo/venv/bin/python /path/to/your/repo/changelog/__main__.py
+    0 * * * * cd /path/to/your/repo && venv/bin/python -m download_data
+    0 * * * * cd /path/to/your/repo && venv/bin/python -m changelog
     ```
     *   **Important:**
-        *   Replace `/path/to/your/repo/` with the absolute path to the directory where you cloned this repository (e.g., `/home/user/catabot/`).
-        *   The paths `/path/to/your/repo/venv/bin/python` assume your virtual environment is named `venv` and is located directly within your project's root directory. Adjust if your setup differs.
-        *   The `crontab.example` file in this repository might contain further project-specific examples or considerations.
+        *   Replace `/path/to/your/repo/` in both lines with the absolute path to the directory where you cloned this repository (e.g., `/home/user/catabot/`).
+        *   The command `venv/bin/python` assumes your virtual environment is named `venv` and is located directly within your project's root directory. Adjust this path if your virtual environment setup differs (e.g., `myenv/bin/python`).
+        *   Using `cd` ensures the commands run from the project's root directory. The `-m` flag is used to run the installed modules `download_data` and `changelog`.
+        *   Refer to the `crontab.example` file in this repository for a complete example, which you can adapt.
 
 4.  **Save and exit the crontab editor.**
 
@@ -140,18 +144,18 @@ To ensure `catabot` runs continuously in the background and restarts automatical
 
 2.  **Review and customize the service file:**
     *   Open `catabot.service`.
-    *   **This file is an example `.service` file. You will likely need to adjust paths (like `ExecStart` and `WorkingDirectory`) and user information to match your system and repository location.**
-    *   Pay attention to fields like:
+    *   **This file is an example `.service` file. You will need to adjust paths (like `ExecStart` and `WorkingDirectory`) and user information to match your system and repository location.**
+    *   Ensure the following fields in `/etc/systemd/system/catabot.service` are correctly set for your environment:
         *   `Description`: A description of the service.
         *   `ExecStart`: This is the most important line. It must specify the command to start the bot using the Python interpreter from your virtual environment and targeting the `catabot` module. **Ensure the path to your repository and the name of your virtual environment directory (`venv` by default) are correct.** For example:
             ```
             ExecStart=/path/to/your/repo/venv/bin/python -m catabot
             ```
-            (Adjust `/path/to/your/repo/` to the absolute path of your project's root directory. If your virtual environment is not named `venv` or is not in the project root, adjust the path to `venv/bin/python` accordingly.)
+            (Replace `/path/to/your/repo/` with the absolute path to the project's root directory. If your virtual environment directory is not named `venv` or is not located directly in the project root, update the path `venv/bin/python` to point to the correct Python interpreter within your virtual environment.)
         *   `WorkingDirectory`: Set this to the root directory of the cloned repository.
-        *   `User`: Specify the user the bot should run as (e.g., a dedicated service user, or your own user).
-        *   `Group`: Specify the group for the bot process.
-        *   `Restart`: Usually set to `always` or `on-failure` to ensure the bot restarts if it crashes.
+        *   `User`: Set this to the username the bot should run as (e.g., `catabot` or your own username).
+        *   `Group`: Set this to the group the bot process should run under (e.g., `catabot` or your own user's group).
+        *   `Restart`: Set to `always` or `on-failure` to ensure the bot restarts if it crashes.
 
 3.  **Copy and edit the service file:**
     *   Copy `catabot.service` to the systemd directory:
@@ -182,7 +186,7 @@ To ensure `catabot` runs continuously in the background and restarts automatical
     ```bash
     sudo systemctl status catabot.service
     ```
-    You can also view its logs using `journalctl -u catabot.service`.
+    View its logs using `journalctl -u catabot.service`.
 
 ## License
 
