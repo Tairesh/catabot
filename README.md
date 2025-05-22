@@ -13,7 +13,7 @@ CataBot is a Telegram bot designed to provide helpful information for players of
 ### Features
 
 *   **Game Information Search:** Look up details about in-game items, crafting recipes, monster stats, and more.
-*   **Release Updates:** Get notifications about new game releases (can be combined with the Changelog Announcer).
+*   **Release Information & Downloads:** Get links to download the latest game versions for various platforms (Linux, Windows, macOS, Android). By default, it provides the last experimental version. It can also fetch specific stable releases, platform-specific experimental versions, and releases for the Cataclysm: Bright Nights fork.
 
 ### Setup
 
@@ -58,7 +58,12 @@ Once the bot is running and you've added it to your Telegram chat, you can use t
     *   Example: `/disassemble radio`
 *   `/monster <query>` or `/mob <query>` or `/m <query>`: Search for a monster.
     *   Example: `/monster zombie_cop`
-*   `/release` or `/get_release`: Get information about the latest game release.
+*   `/release` or `/get_release`: Get download links for game releases.
+    *   Default (and `/release last`): Shows links for the latest experimental version across all major platforms (Linux, Windows, macOS, Android).
+    *   `/release stable`: Shows links for the latest stable version.
+    *   `/release <platform>`: Shows links for the latest experimental version for a specific platform. Replace `<platform>` with `linux`, `windows`, `macos`, or `android`.
+        *   Example: `/release android`
+    *   `/release bn`: Shows links for the latest version of the Cataclysm: Bright Nights fork.
 
 ## Changelog Announcer
 
