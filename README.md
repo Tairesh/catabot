@@ -67,7 +67,7 @@ The Changelog Announcer is a script that monitors the official Cataclysm: DDA Gi
 ### Setup
 
 1.  **Prerequisites:** Ensure `catabot` is set up and you have its Telegram token and the target chat ID for announcements.
-2.  **Configuration:** The script requires configuration for the GitHub repository to monitor (e.g., `CleverRaven/Cataclysm-DDA`) and Telegram details (bot token, chat ID). This configuration is usually done within the script (e.g., `changelog/github.py`, `changelog/tgbot.py`) or a separate configuration file. <!-- TODO: Verify and replace this with specific confirmed details -->
+2.  **Configuration:** The script likely requires configuration for the GitHub repository to monitor (e.g., `CleverRaven/Cataclysm-DDA`) and Telegram details (bot token, chat ID). This configuration is usually done within the script or a separate configuration file. *(Developer note: Check `changelog/github.py` and `changelog/tgbot.py` for specific configuration details and update this section if necessary.)*
 3.  **Dependencies:** Make sure all dependencies are installed (refer to `requirements.txt`).
 4.  **Running the announcer:**
     ```bash
@@ -120,8 +120,8 @@ To automatically update game data and check for new releases, you can set up cro
 
 3.  **Add new lines to schedule the scripts.** For example, to run both scripts every hour:
     ```cron
-    0 * * * * cd /path/to/your/repo && /path/to/your/repo/venv/bin/python -m download_data
-    0 * * * * cd /path/to/your/repo && /path/to/your/repo/venv/bin/python -m changelog
+    0 * * * * /path/to/your/repo/venv/bin/python /path/to/your/repo/download_data/__main__.py
+    0 * * * * /path/to/your/repo/venv/bin/python /path/to/your/repo/changelog/__main__.py
     ```
     *   **Important:**
         *   Replace `/path/to/your/repo/` with the absolute path to the directory where you cloned this repository (e.g., `/home/user/catabot/`).
@@ -136,28 +136,30 @@ This setup will ensure that `download_data` fetches the latest game definitions 
 
 To ensure `catabot` runs continuously in the background and restarts automatically on failure or system reboot, you can set it up as a systemd service.
 
-1.  **Locate the example service file:** An example systemd service configuration is provided in `systemctl-example.toml` or a similarly named file (e.g., `catabot.service`).
+1.  **Locate the example service file:** An example systemd service configuration is provided as `catabot.service` in the root of the repository.
 
 2.  **Review and customize the service file:**
-    *   Open `systemctl-example.toml` (or the actual example file).
-    *   **Crucially, this file is a template (`.toml` format suggests it might be for a tool that generates a `.service` file, or it might be a directly usable example if named `.service`). You will likely need to adjust paths and user information.**
+    *   Open `catabot.service`.
+    *   **This file is an example `.service` file. You will likely need to adjust paths (like `ExecStart` and `WorkingDirectory`) and user information to match your system and repository location.**
     *   Pay attention to fields like:
         *   `Description`: A description of the service.
-        *   `ExecStart`: This is the most important line. It should specify the command to start the bot, typically `python -m catabot`. **Ensure the path to your Python interpreter and the path to the `catabot` module are correct.** For example:
+        *   `ExecStart`: This is the most important line. It must specify the command to start the bot using the Python interpreter from your virtual environment and targeting the `catabot` module. **Ensure the path to your repository and the name of your virtual environment directory (`venv` by default) are correct.** For example:
             ```
             ExecStart=/path/to/your/repo/venv/bin/python -m catabot
             ```
-            (Adjust `/usr/bin/python3` and `/path/to/your/repo/` as needed.)
+            (Adjust `/path/to/your/repo/` to the absolute path of your project's root directory. If your virtual environment is not named `venv` or is not in the project root, adjust the path to `venv/bin/python` accordingly.)
         *   `WorkingDirectory`: Set this to the root directory of the cloned repository.
         *   `User`: Specify the user the bot should run as (e.g., a dedicated service user, or your own user).
         *   `Group`: Specify the group for the bot process.
         *   `Restart`: Usually set to `always` or `on-failure` to ensure the bot restarts if it crashes.
 
-3.  **Create the actual `.service` file:**
-    *   If `systemctl-example.toml` is a template for a tool like `systemd-service-generator`, use that tool to generate the `.service` file.
-    *   If it's a direct example (e.g., if there's a `catabot.service.example`), copy it to `/etc/systemd/system/catabot.service` and edit it:
+3.  **Copy and edit the service file:**
+    *   Copy `catabot.service` to the systemd directory:
         ```bash
-        sudo cp systemctl-example.toml /etc/systemd/system/catabot.service # Adjust filename if needed
+        sudo cp catabot.service /etc/systemd/system/catabot.service
+        ```
+    *   Open the copied file for editing to adjust paths and user settings:
+        ```bash
         sudo nano /etc/systemd/system/catabot.service 
         ```
 
