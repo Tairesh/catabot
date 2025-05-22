@@ -120,8 +120,8 @@ To automatically update game data and check for new releases, you can set up cro
 
 3.  **Add new lines to schedule the scripts.** For example, to run both scripts every hour:
     ```cron
-    0 * * * * /path/to/your/repo/venv/bin/python /path/to/your/repo/download_data/__main__.py
-    0 * * * * /path/to/your/repo/venv/bin/python /path/to/your/repo/changelog/__main__.py
+    0 * * * * cd /path/to/your/repo && /path/to/your/repo/venv/bin/python -m download_data
+    0 * * * * cd /path/to/your/repo && /path/to/your/repo/venv/bin/python -m changelog
     ```
     *   **Important:**
         *   Replace `/path/to/your/repo/` with the absolute path to the directory where you cloned this repository (e.g., `/home/user/catabot/`).
